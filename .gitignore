@@ -15,10 +15,18 @@ __pycache__/
 # MLflow / experiment artifacts
 mlruns/
 mlartifacts/
+mlflow.db
+*.db
 
-# Caches (preprocessed frames, audio, etc. — regenerable, large)
+# Caches (preprocessed frames, audio, etc. — regenerable, large) and model checkpoints
 cache/
 outputs/
+checkpoints/
+models/
+*.pt
+*.pth
+*.ckpt
+*.safetensors
 
 # Editors
 .vscode/
