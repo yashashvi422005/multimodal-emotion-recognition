@@ -1,0 +1,22 @@
+# Paths and parameters for Phase 1 (data verification, metadata, splits).
+# Later phases add their own config files (preprocessing.yaml, audio.yaml, etc.)
+# rather than growing this one.
+
+paths:
+  data_root: data/CREMA-D
+  video_dir: data/CREMA-D/VideoFlash
+  audio_dir: data/CREMA-D/AudioWAV
+  demographics_csv: data/CREMA-D/VideoDemographics.csv
+  outputs_dir: outputs
+  splits_dir: splits
+
+split:
+  train_frac: 0.70
+  val_frac: 0.15
+  test_frac: 0.15
+  # Controls stratum shuffling / tie-breaking when allocating actors to splits.
+  # This is independent of the per-run training seeds (which control model init,
+  # data order, and augmentation) — the split itself is fixed once and reused
+  # by every run.
+  split_seed: 42
+  stratify_on: [Sex, Race]

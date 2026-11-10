@@ -1,0 +1,25 @@
+# Dataset — never commit (verified in place, not downloaded by this repo)
+data/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+*.egg-info/
+
+# OS
+.DS_Store
+
+# MLflow / experiment artifacts
+mlruns/
+mlartifacts/
+
+# Caches (preprocessed frames, audio, etc. — regenerable, large)
+cache/
+outputs/
+
+# Editors
+.vscode/
+.idea/

@@ -1,0 +1,45 @@
+# Top-level dependencies (unpinned). After install, exact resolved versions
+# are frozen into requirements.txt via `pip freeze` for reproducibility.
+
+# Core data handling
+pandas
+numpy
+pyyaml
+tqdm
+
+# Media probing / IO (Phase 1 needs this to inspect real file properties)
+av            # PyAV: robust .flv/.wav container+codec probing
+soundfile
+librosa
+
+# Testing (leakage check, etc.)
+pytest
+
+# Classical ML + metrics
+scikit-learn
+scipy
+
+# Plotting (confusion matrices, degradation curves — later phases)
+matplotlib
+seaborn
+
+# Deep learning (Phase 3/4/5)
+torch
+torchvision
+torchaudio
+timm
+transformers
+
+# Face detection / landmarks (Phase 2)
+mediapipe
+retina-face
+
+# Classical audio features (Phase 3)
+opensmile
+
+# Experiment tracking
+mlflow
+wandb
+
+# Demo (Phase 7)
+gradio
