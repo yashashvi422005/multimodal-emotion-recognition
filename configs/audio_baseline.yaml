@@ -1,0 +1,23 @@
+# Phase 3 classical audio baseline: openSMILE eGeMAPSv02 functionals +
+# StandardScaler + multinomial logistic regression, vs. a stratified
+# chance-level baseline. Evaluated on VAL only — test set is off-limits.
+
+features:
+  cache_path: cache/features/egemaps_functionals_train_val.parquet
+
+model:
+  class_weight: balanced
+  solver: lbfgs
+  max_iter: 1000
+  C: 1.0
+
+seeds: [0, 1, 2]
+
+mlflow:
+  # Plain filesystem tracking ('./mlruns') is in maintenance mode as of
+  # mlflow 3.18 and raises on use; sqlite is mlflow's own recommended
+  # local-default replacement. Still local, still gitignored (*.db).
+  tracking_uri: "sqlite:///mlflow.db"
+  experiment_name: phase3_audio_classical_baseline
+
+class_order: [anger, disgust, fear, happy, neutral, sad]
