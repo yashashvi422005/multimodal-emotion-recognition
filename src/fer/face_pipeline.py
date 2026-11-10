@@ -25,6 +25,24 @@ NOSE_BRIDGE_TOP = 168
 CHIN = 152
 JAW_LEFT = 234
 JAW_RIGHT = 454
+LEFT_EYE_INNER = 133
+RIGHT_EYE_INNER = 362
+# Lower-face oval: right cheek (near ear) -> jaw -> chin -> jaw -> left cheek,
+# a contiguous slice of the canonical face-oval contour, used as the mask's
+# outer (cheek/jaw/chin) boundary.
+LOWER_FACE_OVAL = [454, 323, 361, 288, 397, 365, 379, 378, 400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234]
+SEVERITIES = [0.3, 0.6, 0.9]
+
+
+def _angle_sorted_polygon(points: np.ndarray) -> list[tuple[float, float]]:
+    """Order a point cloud into a simple (non-self-intersecting) polygon by
+    sorting around its centroid by angle. Correct for star-shaped regions
+    like a face mask outline (concave at the chin, but every boundary point
+    is still visible from the centroid)."""
+    centroid = points.mean(axis=0)
+    angles = np.arctan2(points[:, 1] - centroid[1], points[:, 0] - centroid[0])
+    order = np.argsort(angles)
+    return [tuple(p) for p in points[order]]
 
 
 def clip_seed(clip_id: str, seed: int) -> int:
@@ -50,6 +68,15 @@ class FaceDetector:
         options = mp.tasks.vision.FaceLandmarkerOptions(base_options=base_options, num_faces=1)
         self._mp_landmarker = mp.tasks.vision.FaceLandmarker.create_from_options(options)
         self._retinaface = None  # lazy import/init — heavy (torch) and only needed on fallback
+
+    def detect_mediapipe_only(self, frame_rgb: np.ndarray) -> DetectionResult:
+        """No RetinaFace fallback — used for the occlusion-robustness
+        measurement, which specifically asks whether MediaPipe (the primary
+        detector) still finds a face on an occluded crop."""
+        result = self._detect_mediapipe(frame_rgb)
+        if result is not None:
+            return result
+        return DetectionResult(success=False, method=None, bbox=None, landmarks_478=None, landmarks_5=None)
 
     def _detect_mediapipe(self, frame_rgb: np.ndarray) -> DetectionResult | None:
         h, w = frame_rgb.shape[:2]
@@ -122,23 +149,28 @@ def _avg_color(img: np.ndarray, region_frac=(0.15, 0.5, 0.35, 0.65)) -> tuple[in
 
 
 def apply_mask(crop_rgb: np.ndarray, landmarks_478: np.ndarray | None, severity: float) -> np.ndarray:
-    """Surgical-mask-style occlusion: nose bridge down to chin, spanning
-    jaw width. Falls back to a generic lower-face rectangle if no dense
+    """Surgical-mask-style occlusion, fully opaque: a landmark polygon
+    covering the nose and mouth down to the chin. Top boundary is the nose
+    bridge (apex, between the inner eye corners); outer boundary follows
+    the lower-face oval (cheek -> jaw -> chin -> jaw -> cheek). `severity`
+    extends the bottom edge slightly further past the chin and widens the
+    cheek margin. Falls back to a generic lower-face rectangle if no dense
     landmarks are available (RetinaFace-only fallback)."""
     img = Image.fromarray(crop_rgb.copy())
     draw = ImageDraw.Draw(img, "RGBA")
     h, w = crop_rgb.shape[:2]
     if landmarks_478 is not None:
-        top_y = landmarks_478[NOSE_BRIDGE_TOP][1]
-        bottom_y = min(h, landmarks_478[CHIN][1] + 0.15 * h * severity)
-        left_x = landmarks_478[JAW_LEFT][0]
-        right_x = landmarks_478[JAW_RIGHT][0]
+        oval_pts = landmarks_478[LOWER_FACE_OVAL].copy()
+        centroid = oval_pts.mean(axis=0)
+        oval_pts = centroid + (oval_pts - centroid) * (1.0 + 0.08 * severity)  # widen with severity
+        top_pts = landmarks_478[[LEFT_EYE_INNER, NOSE_BRIDGE_TOP, RIGHT_EYE_INNER]]
+        all_pts = np.vstack([oval_pts, top_pts])
+        polygon = _angle_sorted_polygon(all_pts)
     else:
-        top_y, bottom_y = h * 0.45, h * (0.95 * severity + 0.05)
+        top_y, bottom_y = h * 0.45, h * (0.80 + 0.15 * severity)
         left_x, right_x = w * 0.15, w * 0.85
-    box = [(left_x, top_y), (right_x, top_y), (right_x * 1.02, bottom_y), (left_x * 0.98, bottom_y)]
-    alpha = int(180 * min(1.0, severity + 0.3))
-    draw.polygon(box, fill=(180, 200, 215, alpha))
+        polygon = [(left_x, top_y), (right_x, top_y), (right_x * 1.02, bottom_y), (left_x * 0.98, bottom_y)]
+    draw.polygon(polygon, fill=(180, 200, 215, 255))
     return np.array(img)
 
 
@@ -154,7 +186,7 @@ def apply_sunglasses(crop_rgb: np.ndarray, landmarks_478: np.ndarray | None, sev
         x1, y1, x2, y2 = w * 0.15, h * 0.25, w * 0.85, h * 0.5
     pad_x, pad_y = (x2 - x1) * 0.15 * severity, (y2 - y1) * 0.6 * severity
     box = [x1 - pad_x, y1 - pad_y, x2 + pad_x, y2 + pad_y]
-    draw.ellipse(box, fill=(20, 20, 20, 235))
+    draw.ellipse(box, fill=(20, 20, 20, 255))
     return np.array(img)
 
 
@@ -183,7 +215,7 @@ def apply_hand_over_mouth(crop_rgb: np.ndarray, landmarks_478: np.ndarray | None
     jitter = rng.uniform(-0.05, 0.05, size=2) * [w, h]
     cx, cy = cx + jitter[0], cy + jitter[1]
     rx, ry = w * (0.22 + 0.15 * severity), h * (0.18 + 0.15 * severity)
-    draw.ellipse([cx - rx, cy - ry * 0.6, cx + rx, cy + ry], fill=skin_color + (235,))
+    draw.ellipse([cx - rx, cy - ry * 0.6, cx + rx, cy + ry], fill=skin_color + (255,))
     return np.array(img)
 
 

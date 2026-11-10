@@ -163,7 +163,7 @@ python scripts/06_audio_baseline_uncertainty.py    # speaker-level uncertainty (
 - All runs logged to MLflow (`sqlite:///mlflow.db`, gitignored; plain-file tracking is deprecated as of
   the installed mlflow 3.18 and raises on use), tagged with the split content-hash and git commit.
 
-## Phase 2 pilot (Part A only): 20-clip feasibility check
+## Phase 2 pilot (Part A): 20-clip feasibility check
 
 ```bash
 python scripts/07_phase2_pilot.py
@@ -176,14 +176,57 @@ python scripts/07_phase2_pilot.py
   in the installed mediapipe 1.2.2, replaced by the Tasks API — required downloading
   `face_landmarker.task` from Google's model store into `models/mediapipe/`, gitignored) with a
   RetinaFace fallback (used 0 times in this pilot) — no Haar cascades.
-- Over 491 sampled frames (~10fps) across the 20 clips: **0% detection failure rate**, mean **0.14s**
-  wall time per clip on this Mac. Extrapolated to all 7,439 clips: **~17.5 minutes** — comfortably
-  within local-CPU reach; **no need to move Phase 2 preprocessing to Kaggle/Colab.**
-- All 4 occlusion types (mask, sunglasses, patch, hand_over_mouth) implemented as landmark-placed,
-  deterministic-per-clip-and-seed synthetic overlays; contact sheet saved to
-  `outputs/phase2_pilot/contact_sheet.png` (gitignored — regenerate via the script above). Sunglasses
-  and patch placement look solid; the mask shape is the roughest of the four (a semi-transparent
-  rectangle rather than a mask-contoured polygon) and needs refinement before full Phase 2.
+- First pass: 0% detection failure rate, ~0.14s/clip. Occlusion overlays were initially semi-transparent
+  and the mask was a loose rectangle — fixed before Phase 2 Part B (below): all 4 types now fully opaque,
+  and the mask is a landmark polygon (nose bridge apex, cheek/jaw/chin oval boundary, angle-sorted into a
+  simple polygon) rather than a bounding-box rectangle.
+
+## Phase 2 Part B: full run, all 7,439 clips
+
+```bash
+python scripts/08_phase2_full_run.py          # ~30 min on this Mac
+python scripts/09_build_final_contact_sheet.py
+```
+
+Run over **all** 7,439 canonical clips, including test-actor clips — unlike the Phase 3 audio-feature
+extraction, this was an explicit instruction to cover the full dataset, and face/audio caching is
+deterministic preprocessing with no fitted parameters (no test-set rule is implicated).
+
+Per clip, cached to `cache/` (gitignored, 5.3GB total, regenerable):
+- `face_crops/{clip_id}/frame_NNN.jpg` — clean 224x224 crops for every ~10fps-sampled frame (2.2GB)
+- `landmarks/{clip_id}.npz` — 478-pt landmarks for every successfully-detected frame (983MB)
+- `audio/{clip_id}.npy` — mono 16kHz float32 waveform, resampled/verified from AudioWAV (1.1GB)
+- `occluded_crops/{clip_id}/{type}_{severity}.jpg` — all 4 occlusion types x 3 severities (0.3/0.6/0.9),
+  applied to one representative frame per clip (1.0GB)
+
+**Results:**
+- **7,439/7,439 clips processed, 0 script failures**, 29.5 minutes total (~4.2 clips/s).
+- Frame-level face-detection failure rate: **0.02%** (1 of ~4,934 sampled frames missed across the whole
+  run) — essentially clean.
+- **Exactly one clip failed detection on every single sampled frame: `1076_MTI_SAD_XX`** (0/26 frames).
+  Investigated directly: its video is a "Media offline" placeholder slate in 7 languages, not footage —
+  this is CREMA-D's own documented issue for this file ("error picture, no audio, very short" in
+  `README.md`), which Phase 1's container-level probing missed because its duration/audio-stream
+  metadata looked normal. **Open decision for you:** add this to the excluded-clips list (would bring
+  the canonical count to 7,438)? Not excluded yet — the 7,439 count was already checkpointed, so this
+  needs your sign-off rather than a silent change.
+- **MediaPipe detection rate on occluded crops, by type x severity** (`outputs/phase2_occlusion_detection_rate_table.csv`):
+
+  | occlusion_type | 0.3 | 0.6 | 0.9 |
+  |---|---|---|---|
+  | mask | 99.96% | 99.93% | 99.84% |
+  | sunglasses | 100.00% | 99.99% | 99.97% |
+  | hand_over_mouth | 100.00% | 99.99% | 99.99% |
+  | patch | 99.96% | 95.12% | **44.88%** |
+
+  Landmark-placed occlusions (mask/sunglasses/hand_over_mouth) stay near 100% detectable even at high
+  severity, because their placement preserves enough face structure for MediaPipe's detector. The
+  random, non-landmark-aware `patch` type is the outlier: at severity 0.9 it drops to 44.9% because it
+  sometimes randomly lands over the eyes. This is a real, measured difference in how the 4 occlusion
+  types stress the visual branch — relevant context for the Phase 5 confidence-weighting hypothesis.
+- Final contact sheet (4 clips, 4 different actors, 4 different emotions, original + all 12 occlusion
+  variants): `outputs/phase2_pilot/final_contact_sheet_part_b.png` (gitignored, regenerate via the
+  script above).
 
 ## Project structure
 
