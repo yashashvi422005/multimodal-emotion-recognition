@@ -132,21 +132,76 @@ hidden:
   number of actors contributing to each group's score, and **never report
   a per-group score for a group with fewer than 3 actors** in that fold.
 
+## Phase 3 (partial): classical audio baseline — eGeMAPS + logistic regression
+
+Run out of phase order, at explicit request, before Phase 2.
+
+```bash
+python scripts/04_extract_audio_features.py       # caches eGeMAPSv02 functionals for TRAIN+VAL clips only
+python scripts/05_audio_baseline_egemaps_lr.py     # fit on TRAIN, evaluate on VAL, 3 seeds, vs. chance
+python scripts/06_audio_baseline_uncertainty.py    # speaker-level uncertainty (bootstrap + actor-CV)
+```
+
+- 6,461/6,461 train+val clips extracted cleanly (0 failures, 0 NaN/Inf). Test-actor clips (978) are
+  deliberately excluded from extraction — they'll only be extracted inside a future `evaluate.py --final`.
+- `StandardScaler` (fit on train only) + `LogisticRegression(class_weight="balanced", solver="lbfgs")`,
+  trained on TRAIN actors, evaluated on VAL actors only:
+
+  | | macro-F1 | accuracy |
+  |---|---|---|
+  | eGeMAPS + LR | 0.4912 ± 0.0000 | 0.4935 ± 0.0000 |
+  | chance (stratified dummy) | 0.1587 ± 0.0037 | 0.1599 ± 0.0043 |
+
+  The LR std is exactly 0 across the 3 seeds because `lbfgs` is a deterministic solver with no
+  stochastic component on a fixed design matrix — not a bug, and reported as such rather than masked.
+- Because that ±0.0000 only proves determinism, not generalization, speaker-level uncertainty was
+  estimated two ways (neither touches test): a cluster bootstrap over the 15 VAL actors (1000
+  resamples) gives macro-F1 95% CI **[0.4370, 0.5448]**; actor-level 5-fold `GroupKFold` CV over all 79
+  train+val actors gives macro_f1 = **0.5145 ± 0.0247** across folds (pooled out-of-fold macro_f1 0.5161).
+- Per-class F1 (LR): anger 0.69 (easiest), neutral 0.51, sad 0.50, happy 0.48, fear 0.39, disgust 0.37
+  (hardest) — consistent with typical audio-only emotion-recognition results.
+- All runs logged to MLflow (`sqlite:///mlflow.db`, gitignored; plain-file tracking is deprecated as of
+  the installed mlflow 3.18 and raises on use), tagged with the split content-hash and git commit.
+
+## Phase 2 pilot (Part A only): 20-clip feasibility check
+
+```bash
+python scripts/07_phase2_pilot.py
+```
+
+- 20 clips sampled from TRAIN+VAL actors (stratified across the 6 emotions), `.flv` files independently
+  inspected via the `ffprobe` CLI (cross-checks Phase 1's PyAV-based probing — same results: 29.97fps,
+  480x360, `vp6f`).
+- Face detection: MediaPipe `FaceLandmarker` (478 landmarks; the legacy `solutions.face_mesh` API is gone
+  in the installed mediapipe 1.2.2, replaced by the Tasks API — required downloading
+  `face_landmarker.task` from Google's model store into `models/mediapipe/`, gitignored) with a
+  RetinaFace fallback (used 0 times in this pilot) — no Haar cascades.
+- Over 491 sampled frames (~10fps) across the 20 clips: **0% detection failure rate**, mean **0.14s**
+  wall time per clip on this Mac. Extrapolated to all 7,439 clips: **~17.5 minutes** — comfortably
+  within local-CPU reach; **no need to move Phase 2 preprocessing to Kaggle/Colab.**
+- All 4 occlusion types (mask, sunglasses, patch, hand_over_mouth) implemented as landmark-placed,
+  deterministic-per-clip-and-seed synthetic overlays; contact sheet saved to
+  `outputs/phase2_pilot/contact_sheet.png` (gitignored — regenerate via the script above). Sunglasses
+  and patch placement look solid; the mask shape is the roughest of the four (a semi-transparent
+  rectangle rather than a mask-contoured polygon) and needs refinement before full Phase 2.
+
 ## Project structure
 
 ```
-src/fer/          # package: filenames, probe, demographics, metadata, splits, envinfo
-configs/          # YAML configs (data.yaml, ...)
+src/fer/          # package: filenames, probe, demographics, metadata, splits, envinfo,
+                  # audio_features, uncertainty, face_pipeline
+configs/          # YAML configs (data.yaml, audio_baseline.yaml, ...)
 scripts/          # one script per pipeline stage
 splits/           # versioned, hashed actor split files (tracked in git)
 tests/            # pytest suite, incl. the leakage check
-outputs/          # generated artifacts (gitignored): metadata.csv, reports, etc.
+outputs/          # generated artifacts (gitignored): metadata.csv, reports, contact sheets, etc.
+cache/            # cached features (gitignored, regenerable)
+models/           # downloaded model assets, e.g. mediapipe/face_landmarker.task (gitignored)
 data/             # CREMA-D dataset (gitignored — never committed)
 ```
 
 ## Later phases (not started)
 
-Preprocessing (face crops + occlusion synthesis, audio resampling) → audio
-models (eGeMAPS/SVM, then wav2vec2/WavLM) → face models (timm backbones) →
-fusion (calibration + confidence-weighted late fusion) → full experiment
-grid + RESULTS.md → Gradio demo.
+Full Phase 2 preprocessing (face crops + occlusion synthesis at scale, audio resampling+caching) →
+audio models (wav2vec2/WavLM fine-tuning) → face models (timm backbones) → fusion (calibration +
+confidence-weighted late fusion) → full experiment grid + RESULTS.md → Gradio demo.
