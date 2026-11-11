@@ -1,0 +1,40 @@
+# Phase 4: face model (timm ResNet-18, clean + occlusion-robustness eval).
+# Evaluated on VAL only — test set is off-limits until a future evaluate.py --final.
+
+clean_training:
+  seeds: [0, 1, 2]
+  frames_per_clip_train: 4       # subsampled per epoch; throughput-bound (see fer.face_model docstring)
+  monitor_frames_per_clip: 4     # cheap per-epoch early-stopping val subsample
+  max_epochs: 6
+  patience: 2
+  batch_size: 64
+  lr: 1.0e-4
+  checkpoint_dir: models/face_resnet18
+
+occlusion_eval:
+  occlusion_types: [mask, sunglasses, patch, hand_over_mouth]
+  severities: [0.3, 0.6, 0.9]
+  # Evenly spaced frame positions within each clip's cached frame set — NOT
+  # a random subsample, and NOT re-chosen per model/condition. The same 8
+  # frame indices are used for every occlusion type, every severity, and
+  # (if re-run later) every face model, so results are comparable
+  # apples-to-apples instead of each condition drawing its own sample.
+  frames_per_clip_eval: 8
+  frame_selection: evenly_spaced_fixed
+  # MediaPipe re-detection on occluded crops is the expensive step. It is
+  # computed ONCE per (clip, frame, occlusion_type, severity) and cached —
+  # never re-run inside the model-evaluation step itself.
+  detection_cache_path: cache/phase4_occlusion_detection_cache.parquet
+  # Leave this many CPU cores free during the (CPU-bound, multiprocess)
+  # detection-cache build so the Mac stays usable.
+  cpu_cores_reserved: 2
+  # Face-branch missing-detection rule (applied uniformly, not just here):
+  # a frame with no detection casts no vote. If NO frame in a clip is
+  # detected under a given condition, the face branch abstains by
+  # outputting a uniform distribution over classes rather than a
+  # non-existent prediction — the clip still counts in macro-F1 (as
+  # whatever class the uniform distribution's tie-break resolves to), it
+  # is just never counted as a confident, informative face-branch vote.
+  no_detection_policy: uniform_distribution_abstain
+
+class_order: [anger, disgust, fear, happy, neutral, sad]

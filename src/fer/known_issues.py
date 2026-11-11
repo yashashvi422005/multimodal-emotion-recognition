@@ -21,4 +21,13 @@ EXCLUDED_CLIPS: dict[str, str] = {
         "README.md ('very short, no audio' on the raw flv; audio track is "
         "fine in AudioWAV)."
     ),
+    "1076_MTI_SAD_XX": (
+        "'Media offline' placeholder slate (text graphic in 7 languages), "
+        "not footage — confirmed by direct frame inspection during the "
+        "Phase 2 full run, where it failed MediaPipe face detection on all "
+        "26 sampled frames. Matches README.md's documented issue for this "
+        "file ('error picture, no audio, very short'); Phase 1's "
+        "container-level probing missed it because duration/audio-stream "
+        "metadata looked normal."
+    ),
 }

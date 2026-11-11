@@ -102,16 +102,25 @@ python -m pytest tests/ -v
 - `1064_TIE_SAD_XX`, `1076_MTI_NEU_XX`: near-zero video duration (0.57s,
   0.07s) — degenerate/corrupt video, though audio is intact. Matches
   README's documented notes.
+- `1076_MTI_SAD_XX`: a "Media offline" placeholder slate (text graphic in 7
+  languages), not footage. Not caught by Phase 1's container-level probing
+  (duration/audio-stream metadata looked normal) — found during the Phase 2
+  full run, where it failed MediaPipe face detection on all 26 sampled
+  frames. Matches `README.md`'s documented issue for this file ("error
+  picture, no audio, very short").
 - 31 clips are H.264-encoded vs. VP6 (`vp6f`) for the rest; 28 of these
   exactly match the README's list of clips that had audio re-attached in
   Dec. 2020. The other 3 are not individually documented in the README but
   show the same re-encode signature. Kept — codec choice doesn't affect
   label validity.
 
-**Decision (approved at CHECKPOINT 1): exclude the 3 clips above from the
-canonical dataset.** Final clip count: **7,439** (7,442 raw, minus the 3
-excluded). Per-emotion counts after exclusion: anger 1271, fear 1271, happy
-1271, disgust 1270, sad 1270, neutral 1086.
+**Decision (approved at CHECKPOINT 1, extended after the Phase 2 full run):
+exclude the 4 clips above from the canonical dataset.** Final clip count:
+**7,438** (7,442 raw, minus the 4 excluded). Per-emotion counts after
+exclusion: anger 1271, fear 1271, happy 1271, disgust 1270, sad 1269,
+neutral 1086. The frozen actor split (`splits/split_v1.json`) is defined by
+actor, not clip, so this exclusion does not touch it — content hash
+verified unchanged.
 
 ## Split limitations
 
@@ -142,23 +151,25 @@ python scripts/05_audio_baseline_egemaps_lr.py     # fit on TRAIN, evaluate on V
 python scripts/06_audio_baseline_uncertainty.py    # speaker-level uncertainty (bootstrap + actor-CV)
 ```
 
-- 6,461/6,461 train+val clips extracted cleanly (0 failures, 0 NaN/Inf). Test-actor clips (978) are
-  deliberately excluded from extraction — they'll only be extracted inside a future `evaluate.py --final`.
+- 6,460/6,460 train+val clips extracted cleanly (0 failures, 0 NaN/Inf), on the 7,438-clip canonical
+  set (updated after `1076_MTI_SAD_XX` was excluded — see above). Test-actor clips (978, unaffected by
+  that exclusion) are deliberately excluded from extraction — they'll only be extracted inside a future
+  `evaluate.py --final`.
 - `StandardScaler` (fit on train only) + `LogisticRegression(class_weight="balanced", solver="lbfgs")`,
   trained on TRAIN actors, evaluated on VAL actors only:
 
   | | macro-F1 | accuracy |
   |---|---|---|
-  | eGeMAPS + LR | 0.4912 ± 0.0000 | 0.4935 ± 0.0000 |
+  | eGeMAPS + LR | 0.4903 ± 0.0000 | 0.4926 ± 0.0000 |
   | chance (stratified dummy) | 0.1587 ± 0.0037 | 0.1599 ± 0.0043 |
 
   The LR std is exactly 0 across the 3 seeds because `lbfgs` is a deterministic solver with no
   stochastic component on a fixed design matrix — not a bug, and reported as such rather than masked.
 - Because that ±0.0000 only proves determinism, not generalization, speaker-level uncertainty was
   estimated two ways (neither touches test): a cluster bootstrap over the 15 VAL actors (1000
-  resamples) gives macro-F1 95% CI **[0.4370, 0.5448]**; actor-level 5-fold `GroupKFold` CV over all 79
-  train+val actors gives macro_f1 = **0.5145 ± 0.0247** across folds (pooled out-of-fold macro_f1 0.5161).
-- Per-class F1 (LR): anger 0.69 (easiest), neutral 0.51, sad 0.50, happy 0.48, fear 0.39, disgust 0.37
+  resamples) gives macro-F1 95% CI **[0.4361, 0.5439]**; actor-level 5-fold `GroupKFold` CV over all 79
+  train+val actors gives macro_f1 = **0.5156 ± 0.0271** across folds (pooled out-of-fold macro_f1 0.5169).
+- Per-class F1 (LR): anger 0.69 (easiest), neutral 0.51, sad 0.49, happy 0.48, fear 0.39, disgust 0.37
   (hardest) — consistent with typical audio-only emotion-recognition results.
 - All runs logged to MLflow (`sqlite:///mlflow.db`, gitignored; plain-file tracking is deprecated as of
   the installed mlflow 3.18 and raises on use), tagged with the split content-hash and git commit.
@@ -207,9 +218,9 @@ Per clip, cached to `cache/` (gitignored, 5.3GB total, regenerable):
   Investigated directly: its video is a "Media offline" placeholder slate in 7 languages, not footage —
   this is CREMA-D's own documented issue for this file ("error picture, no audio, very short" in
   `README.md`), which Phase 1's container-level probing missed because its duration/audio-stream
-  metadata looked normal. **Open decision for you:** add this to the excluded-clips list (would bring
-  the canonical count to 7,438)? Not excluded yet — the 7,439 count was already checkpointed, so this
-  needs your sign-off rather than a silent change.
+  metadata looked normal. **Decision (resolved):** added to the excluded-clips list — the canonical
+  count is now **7,438** (see "Known upstream data quirks" above). This run itself still processed the
+  pre-exclusion 7,439-clip set, as recorded below; all later phases use the 7,438-clip canonical set.
 - **MediaPipe detection rate on occluded crops, by type x severity** (`outputs/phase2_occlusion_detection_rate_table.csv`):
 
   | occlusion_type | 0.3 | 0.6 | 0.9 |
@@ -228,6 +239,106 @@ Per clip, cached to `cache/` (gitignored, 5.3GB total, regenerable):
   variants): `outputs/phase2_pilot/final_contact_sheet_part_b.png` (gitignored, regenerate via the
   script above).
 
+## Phase 4 (first version): face model — ResNet-18 fine-tuning + occlusion robustness
+
+```bash
+python scripts/10_face_model_train.py          # 3 seeds, clean training, MPS
+python scripts/11_face_model_occlusion_eval.py # detection cache (CPU, parallel) + model eval (MPS)
+```
+
+### Clean training design
+
+- Frame-level fine-tuning of timm `resnet18` (ImageNet-pretrained) on TRAIN actors' cached face crops;
+  clip-level prediction by averaging per-frame softmax probabilities, then argmax. Evaluated on VAL
+  actors only — test untouched.
+- Benchmarked on this Mac's MPS backend with disk-loaded JPEGs: ~110 img/s realistic throughput;
+  `num_workers>0` was measured SLOWER (88.9/86.6 img/s at 4/8 workers vs. 113.1 img/s at 0) —
+  multiprocessing spawn overhead dominates at this dataset scale, so `num_workers=0` throughout.
+- To fit a ~30 min/seed budget: train on 4 subsampled frames/clip/epoch (deterministic per clip+seed,
+  genuinely varies across epochs and seeds — an extra source of run-to-run variation beyond weight
+  init); per-epoch early stopping is monitored on a cheap subsampled VAL set (same 4-frame scheme); only
+  the **final best checkpoint** gets the expensive full-cached-frame VAL evaluation, which is what's
+  reported. `max_epochs=6`, `patience=2`, class-weighted cross-entropy, Adam lr=1e-4. 3 seeds (0,1,2).
+- Settings recorded in `configs/face_model.yaml`.
+
+### Clean results (VAL, 3 seeds)
+
+| | macro-F1 | accuracy |
+|---|---|---|
+| ResNet-18 (clean) | **0.5724 ± 0.0037** | 0.6010 ± 0.0023 |
+
+- Bootstrap CI (seed 0's model, 1000 resamples over 15 val actors): **[0.4952, 0.6491]**.
+- Per-class F1 (mean ± std over 3 seeds): happy 0.83±0.04 and disgust 0.74±0.01 (easiest), neutral
+  0.58±0.02, fear 0.55±0.01, anger 0.54±0.02, **sad 0.18±0.02 — by far the hardest, confused mostly
+  with fear and anger** per the confusion matrix.
+- Confusion matrix (seed 0) saved to `outputs/confusion_matrix_face_resnet18_seed0.csv`; all 3 seeds +
+  the summary logged to MLflow (`sqlite:///mlflow.db`, experiment `phase4_face_resnet18_clean`).
+
+### Occlusion-robustness evaluation: design
+
+A first attempt re-ran MediaPipe detection inside the model-eval loop, on every cached frame
+(~20-30/clip) x 12 conditions (4 types x 3 severities), single process — projected to ~12 hours over
+the 1,224 val clips and was killed rather than left to run. Redesigned into two phases (both in
+`scripts/11_face_model_occlusion_eval.py`; settings recorded in `configs/face_model.yaml`):
+
+1. **Detection cache (CPU, multiprocess, run once):** 8 *evenly spaced* frames per clip — the same 8
+   frames for every occlusion type, severity, and (if re-run later) model, so results are comparable
+   apples-to-apples rather than each condition drawing its own sample. For each (clip, frame, type,
+   severity): apply the occlusion, run MediaPipe detection, cache the True/False result
+   (`cache/phase4_occlusion_detection_cache.parquet`) — reusable by future face models, since detection
+   depends only on the occluded image, not model weights. Parallelized across CPU cores, reserving 2 so
+   the Mac stays usable.
+2. **Model evaluation (MPS, single process, batched, `torch.no_grad()`, eval mode):** reads the cached
+   True/False table — detection is never re-run here. Regenerates (cheap, deterministic) the occluded
+   crops only for frames the cache marked detected, batches them per clip/condition, and averages
+   softmax probabilities.
+
+**Face-branch missing-detection rule:** a frame with no detection casts no vote. If a clip has zero
+surviving frames under a condition, the face branch abstains by outputting a uniform distribution over
+the 6 classes rather than being skipped — the clip still counts in macro-F1 (scored via a deterministic
+argmax tie-break), so a condition that defeats detection shows up as a real penalty instead of
+vanishing from the average.
+
+A 20-clip dry run measured ~2.6 clips/s for the detection phase and ~0.23s/clip for the eval phase,
+projecting a ~15-20 min full run; the actual full run took **10.3 minutes** (3.5 min detection-cache
+build + 6.8 min model eval) — comfortably inside the pre-agreed ~1 hour budget.
+
+### Occlusion results (VAL, seed-0 model, 1,224 clips)
+
+| occlusion_type | severity | macro-F1 | accuracy | abstained (zero-detection clips) |
+|---|---|---|---|---|
+| mask | 0.3 | 0.1182 | 0.2092 | 0/1224 |
+| mask | 0.6 | 0.1142 | 0.2083 | 0/1224 |
+| mask | 0.9 | 0.1204 | 0.2173 | 0/1224 |
+| sunglasses | 0.3 | 0.2570 | 0.3578 | 0/1224 |
+| sunglasses | 0.6 | 0.2787 | 0.3734 | 0/1224 |
+| sunglasses | 0.9 | 0.2515 | 0.3587 | 0/1224 |
+| patch | 0.3 | 0.4024 | 0.4314 | 0/1224 |
+| patch | 0.6 | 0.2496 | 0.3121 | 26/1224 |
+| patch | 0.9 | 0.1308 | 0.2010 | **493/1224 (40.3%)** |
+| hand_over_mouth | 0.3 | 0.2926 | 0.3799 | 0/1224 |
+| hand_over_mouth | 0.6 | 0.2581 | 0.3480 | 0/1224 |
+| hand_over_mouth | 0.9 | 0.2406 | 0.3252 | 0/1224 |
+
+Full table: `outputs/phase4_occlusion_eval_table.csv`.
+
+- Every occlusion condition collapses macro-F1 well below the clean 0.5724 — even the mildest
+  (sunglasses/hand_over_mouth at severity 0.3) roughly halve it. `mask` is the most damaging type at
+  every severity (macro-F1 ≈ 0.11-0.12) despite covering a similar-sized area to the others, plausibly
+  because it occludes the nose-to-chin region the model may be relying on most — consistent with the
+  clean model's own weakest class (`sad`) being confused mainly with `fear`/`anger`, all mouth/jaw-cue
+  dependent.
+- `patch` is the only type whose detection failure rate itself degrades sharply with severity (0
+  abstentions at 0.3 → 26 at 0.6 → **493/1224 at 0.9**), matching Phase 2 Part B's finding that this
+  random, non-landmark-aware occlusion sometimes lands over the eyes. Its macro-F1 at severity 0.3
+  (0.40) is the *highest* of any occluded condition — a small, randomly-placed patch is often less
+  disruptive than a full lower-face mask — but by severity 0.9 it is both the most detection-defeating
+  and among the worst-performing conditions.
+- This is exactly the failure mode the planned confidence-weighted fusion (Phase 5) is meant to
+  address: under every occlusion condition here the face branch is far weaker than the clean audio
+  baseline (macro-F1 0.49) alone, so a fusion mechanism that shifts weight toward audio under visual
+  uncertainty should recover much of this loss — not yet tested, since fusion hasn't been built.
+
 ## Project structure
 
 ```
@@ -245,6 +356,6 @@ data/             # CREMA-D dataset (gitignored — never committed)
 
 ## Later phases (not started)
 
-Full Phase 2 preprocessing (face crops + occlusion synthesis at scale, audio resampling+caching) →
-audio models (wav2vec2/WavLM fine-tuning) → face models (timm backbones) → fusion (calibration +
-confidence-weighted late fusion) → full experiment grid + RESULTS.md → Gradio demo.
+Audio models (wav2vec2/WavLM fine-tuning) → fusion (calibration + confidence-weighted late fusion,
+testing whether it recovers the occlusion losses measured in Phase 4) → full experiment grid +
+RESULTS.md → Gradio demo.
