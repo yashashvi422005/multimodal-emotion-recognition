@@ -555,13 +555,14 @@ face-only 0.325 ± 0.039, **fixed 50/50 0.563 ± 0.018**, conf max-prob 0.559 ±
 0.544 ± 0.018, learned gate 0.543 ± 0.015 — fixed fusion still wins outright once the face branch is this
 much more robust.
 
-**Fixed 50/50 fusion beats every confidence-weighted or learned-gate variant in 38 of 39
-(condition × face-model-variant) comparisons.** The one partial exception is the clean-trained model's
-`mask 0.9` (bolded above) — the single condition where the face branch is closest to useless (macro-F1
-0.116, barely above the 1/6-class floor) — where the learned gate (0.499) edges fixed 50/50 (0.490) by
-about 1 point, within the run-to-run std (~0.014-0.018) and not a meaningful win; it mainly reflects the
-gate correctly pushing face weight down (mean face weight 0.256) toward audio-only (0.490), not genuine
-synergy. For both augmented variants, fixed 50/50 wins mask 0.9 outright too.
+**Fixed 50/50 fusion beats-or-matches all three adaptive methods (confidence max-prob, confidence
+neg-entropy, learned gate) in 35 of 39 (condition × face-model-variant) comparisons** (corrected from an
+earlier, imprecise "38 of 39" — see `RESULTS.md` round 3 for the correction). The 4 exceptions all involve
+a severely degraded face branch: clean-trained/mask 0.6, clean-trained/mask 0.9, clean-trained/patch 0.9,
+and aug_no_mask/mask 0.9 — in each, one adaptive method (usually the learned gate) edges fixed out by
+roughly 1 point, within the run-to-run std (~0.014-0.018), e.g. at clean-trained `mask 0.9` the learned
+gate (0.499) vs. fixed (0.490), mainly reflecting the gate correctly pushing face weight down (mean face
+weight 0.256) toward audio-only (0.490), not genuine synergy.
 
 **Headline: making the face branch far more occlusion-robust (the augmented-training ablation above) did
 not change the round-1 conclusion about weighting.** A per-clip weight built from a branch's own
@@ -577,6 +578,49 @@ correctly detecting detection failure on the ~40% of clips where it occurs, whil
 for the other ~60% that still got a (sometimes wrong) prediction. The resulting fusion score is close to,
 but still not above, fixed 50/50 — blind averaging isn't beaten by conditionally zeroing out face only
 on the clips that failed detection.
+
+## Phase 5, round 3 (development version): fusion table for the augmented face models
+
+Same script and data as round 2 (`outputs/phase5_fusion_v2_table.csv`); this section surfaces the
+`aug_all` / `aug_no_mask` rows specifically.
+
+| condition | audio-only | face-only (aug_all) | fixed 50/50 | conf max-prob | conf neg-entropy | learned gate |
+|---|---|---|---|---|---|---|
+| clean | 0.490 | 0.572 ± 0.020 | **0.702 ± 0.023** | 0.691 ± 0.025 | 0.684 ± 0.025 | 0.681 ± 0.035 |
+| mask 0.3 | 0.490 | 0.479 ± 0.043 | **0.658 ± 0.029** | 0.643 ± 0.031 | 0.638 ± 0.032 | 0.621 ± 0.043 |
+| mask 0.6 | 0.490 | 0.453 ± 0.042 | **0.641 ± 0.013** | 0.632 ± 0.013 | 0.626 ± 0.011 | 0.609 ± 0.022 |
+| mask 0.9 | 0.490 | 0.325 ± 0.039 | **0.563 ± 0.018** | 0.559 ± 0.016 | 0.544 ± 0.018 | 0.543 ± 0.015 |
+| patch 0.9 | 0.490 | 0.274 ± 0.026 | **0.537 ± 0.013** | 0.530 ± 0.013 | 0.522 ± 0.008 | 0.523 ± 0.010 |
+| sunglasses 0.9 | 0.490 | 0.508 ± 0.043 | **0.657 ± 0.019** | 0.642 ± 0.022 | 0.642 ± 0.019 | 0.645 ± 0.026 |
+| hand_over_mouth 0.9 | 0.490 | 0.439 ± 0.049 | **0.639 ± 0.011** | 0.632 ± 0.014 | 0.626 ± 0.018 | 0.603 ± 0.011 |
+
+All mean face weights under `fixed_5050` are, by definition, 0.500 (full table has every method's weight;
+see `outputs/phase5_fusion_v2_table.csv` for `aug_no_mask` and all 13 conditions × both variants).
+
+**Average margin, fixed 50/50 minus each adaptive method, over all 13 conditions:**
+
+| | aug_all | aug_no_mask |
+|---|---|---|
+| vs. conf max-prob | +0.0106 (wins 13/13) | +0.0092 (wins 13/13) |
+| vs. conf neg-entropy | +0.0180 (wins 13/13) | +0.0144 (wins 12/13) |
+| vs. learned gate | +0.0265 (wins 13/13) | +0.0247 (wins 13/13) |
+
+**Does fixed 50/50 fusion with an augmented face beat audio-only in every occlusion condition? Yes — for
+both augmented variants, not for the clean-trained one.** `aug_all` and `aug_no_mask` each beat audio-only
+in **12/12** occlusion conditions (margin +0.045 to +0.179). The clean-trained model's fixed fusion
+managed only **10/12**, failing on `mask 0.6` (0.413 vs. audio's 0.490) and `mask 0.9` (0.490 vs. 0.490, a
+dead heat) — exactly the two conditions where its face branch collapses hardest. This is a new finding
+from the augmented-training ablation: training-time occlusion doesn't just improve the face branch in
+isolation, it also removes fusion's worst failure mode (fusion dragging below audio-only), because the
+face branch no longer collapses into a confidently-wrong answer under mask.
+
+## Final evaluation plan (pre-registered, not yet executed)
+
+See `FINAL_EVAL_PLAN.md` — committed before any test-set code runs. Specifies the exact models (all 3
+face variants × 3 seeds, no retraining needed), all 13 conditions, all fusion methods, macro-F1 as primary
+metric, and a paired actor-level bootstrap over the 12 test actors for two pre-registered comparisons
+(fixed-fusion vs. audio-only; `aug_no_mask` vs. clean-trained face under mask). Commits in advance to
+reporting whatever the test set shows.
 
 ## Project structure
 
