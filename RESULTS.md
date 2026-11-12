@@ -1,0 +1,80 @@
+# Results
+
+Running log of headline findings, in plain language, as they're produced. VAL only throughout — the
+test set stays frozen and untouched until a future `evaluate.py --final`. Every number here is
+development-stage (val-tuned), not a final claim; see `README.md` for full methodology, scripts, and
+per-phase detail.
+
+## Phase 5, round 1 (development): confidence-weighted fusion
+
+**Headline: the confidence-weighting hypothesis is not supported in this form.**
+
+The research question asks whether confidence-weighted late fusion recovers performance lost under
+facial occlusion by shifting reliance to voice. The first implementation — per-clip fusion weights
+derived from each branch's own (temperature-calibrated) max-softmax probability — does **not**
+reliably do this better than simple fixed 50/50 fusion:
+
+| condition | fixed 50/50 | confidence-weighted (max-prob) |
+|---|---|---|
+| clean | 0.700 | 0.687 (worse) |
+| mask 0.6 | 0.470 | 0.460 (worse) |
+| mask 0.9 | 0.459 | 0.452 (worse) |
+| patch 0.9 | 0.491 | 0.488 (worse, but both ≈ audio-only by construction — see below) |
+| sunglasses / hand_over_mouth (all severities) | consistently better | consistently slightly worse |
+
+Confidence-weighting beat fixed fusion on **no condition** in this round. It was roughly tied where the
+face branch's failure showed up as low confidence (explicit zero-detection abstention, which forces an
+exactly-uniform, obviously-unconfident distribution — this happens under `patch`), and it was worse
+everywhere else, including on `mask`, the occlusion type the research question is most concerned with.
+
+**Why:** `mask` collapses the face model onto predicting "anger" for 82-87% of clips (vs. 26% on clean)
+— a confident, systematic wrong answer, not a hedged one. Mean max-softmax confidence under mask (0.37-
+0.39) is lower than clean (0.58) but not low enough, relative to audio's own confidence, to meaningfully
+shift fusion weight away from the face branch. A weighting signal built only from raw max-probability
+has no way to distinguish "uncertain" from "confidently wrong," and `mask` is squarely the second case.
+
+This is being recorded here, not just in a worse-looking table, because it's a real result: the
+mechanism proposed for the project's core research question does not work as first implemented, and
+a different signal (e.g. one that incorporates per-class confusion history or an explicit
+detection-failure flag, not just max-softmax) is needed before the confidence-weighting hypothesis can
+be fairly tested. See `README.md`'s Phase 5 section for the full table and the ECE/calibration results
+behind it.
+
+*(Superseded by round 2 below — this entry is kept as the honest first-round record.)*
+
+## Phase 5, round 2 (development): mask fix, occlusion-augmented training, expanded fusion table
+
+**1. Mask severity — fixed, now clearly monotonic.** Round 1's mask coverage was nearly tied at severities 0.6 and 0.9 (~20.5% both), because the two discrete landmark anchors used for those levels happened to sit at almost the same height. Replaced with a continuous linear interpolation between mean mouth-top height and mean eyebrow height. New official coverage (300-sample measurement):
+
+| severity | 0.3 | 0.6 | 0.9 |
+|---|---|---|---|
+| face-crop coverage | 11.75% | 17.49% | 23.43% |
+
+Clearly, monotonically increasing now, and well separated.
+
+**2. Occlusion-augmented face model: a real robustness gain, at no clean-accuracy cost.** Two ResNet-18 variants were fine-tuned with random occlusions applied during training (3 seeds each): `aug_all` (all 4 occlusion types seen in training) and `aug_no_mask` (mask held out — unseen at evaluation). Monitoring/final-metric stayed on clean val throughout, matching the original clean-trained model's methodology, so the comparison isolates the effect of training-time occlusion exposure.
+
+Clean val macro-F1 (mean ± std, 3 seeds): clean-trained 0.572±0.005, `aug_all` 0.572±0.020, `aug_no_mask` 0.582±0.027 — **no meaningful loss on clean data.**
+
+Occlusion macro-F1, selected conditions (full table in `outputs/phase4_occlusion_table_by_variant.csv`):
+
+| condition | clean-trained | aug_all | aug_no_mask |
+|---|---|---|---|
+| mask 0.3 | 0.315 | 0.479 | 0.405 |
+| mask 0.6 | 0.184 | 0.453 | 0.361 |
+| mask 0.9 | 0.116 | 0.325 | 0.184 |
+| patch 0.9 | 0.147 | 0.274 | 0.273 |
+| sunglasses 0.9 | 0.278 | 0.508 | 0.521 |
+| hand_over_mouth 0.9 | 0.281 | 0.439 | 0.436 |
+
+Every occlusion condition improves substantially with training-time augmentation. Notably, `aug_no_mask` — which never saw mask during training — still roughly **doubles** mask performance at every severity (e.g. 0.9: 0.116 → 0.184), showing partial transfer from the other three occlusion types to an unseen one. `aug_all`, which did see mask, does even better on mask (0.9: 0.116 → 0.325, nearly 3x) without sacrificing its performance on the other three types relative to `aug_no_mask`.
+
+**3. Expanded fusion table: the confidence-weighting hypothesis still is not supported, now checked against all three face models.** Full table (mean ± std over 3 seeds, including mean face weight) is in `outputs/phase5_fusion_v2_table.csv`. Four fusion methods were compared — fixed 50/50, confidence-weighted (max-probability), confidence-weighted (negative entropy), and a learned logistic-regression gate — against audio-only and face-only, across all 13 conditions (clean + 4 occlusion types × 3 severities) and all 3 face-model variants (clean-trained, `aug_all`, `aug_no_mask`).
+
+**Fixed 50/50 fusion beats every confidence-weighted or learned-gate variant in 38 of 39 (condition × variant) comparisons.** The one partial exception is the clean-trained model's `mask 0.9` — the single condition where the face branch is closest to useless (macro-F1 0.116, barely above the 1/6-class floor): there, the learned gate (0.499) edges out fixed 50/50 (0.490) by about 1 point, which is within the run-to-run std (~0.014–0.018) and not a meaningful win — it mainly reflects the gate correctly pushing face weight down (mean face weight 0.256) toward audio-only (0.490), not a genuine synergistic gain. For the two augmented models, fixed 50/50 wins mask 0.9 outright too.
+
+This means: making the face branch much more occlusion-robust (point 2) did **not** change the earlier conclusion about weighting. A per-clip weight built from a branch's own confidence (max-softmax or negative entropy) or from a logistic gate trained on those confidences still does not reliably beat simply averaging the two branches, regardless of which face model is behind it.
+
+**Note on patch 0.9: fusion ≈ audio by construction.** At patch severity 0.9, 493/1224 (40.3%) of clips get zero face detections and are scored as an exactly-uniform face distribution. Any confidence-weighted method correctly identifies these as unconfident and pushes face weight toward 0 for them specifically — mean face weight at patch 0.9 drops to 0.11–0.35 across variants and methods, roughly half of the 0.50 baseline. This is *not* evidence that confidence-weighting "solves" patch occlusion; it's the mechanism correctly detecting detection failure on the ~40% of clips where it occurs, while doing nothing special for the other ~60% that still have a detection and a real (sometimes wrong) prediction. The resulting fusion score (e.g. aug_all: conf_maxprob 0.530 vs fixed_5050 0.537) is close to but still below fixed 50/50 — averaging, even blindly, isn't beaten by conditionally zeroing out face only on the clips that failed detection.
+
+*(Val only, development-stage. No test-set numbers anywhere in this round.)*

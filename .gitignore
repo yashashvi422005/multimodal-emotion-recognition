@@ -31,3 +31,4 @@ models/
 # Editors
 .vscode/
 .idea/
+.claude/

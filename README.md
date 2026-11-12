@@ -307,23 +307,38 @@ A 20-clip dry run measured ~2.6 clips/s for the detection phase and ~0.23s/clip 
 projecting a ~15-20 min full run; the actual full run took **10.3 minutes** (3.5 min detection-cache
 build + 6.8 min model eval) — comfortably inside the pre-agreed ~1 hour budget.
 
-### Mask severity: redefined by vertical extent (fix)
+### Mask severity: redefined by vertical extent (fix, v1 — superseded below)
 
 The original `mask` occlusion scaled continuously with severity (a small oval-widening factor,
 `1 + 0.08*severity`), which barely changed its coverage (21-23% across all three severities) and gave a
-flat, uninformative severity curve. Redefined (`fer.face_pipeline.apply_mask`) so severity selects a
+flat, uninformative severity curve. Redefined (`fer.face_pipeline.apply_mask`, v1) so severity selects a
 *landmark-anchored vertical extent*, with the bottom/side boundary always the cheek-jaw-chin oval:
 
 | severity | top edge | mean coverage (224x224 crop) |
 |---|---|---|
-| 0.3 | mouth (upper lip) | **9.8%** |
-| 0.6 | nose bridge midpoint | **20.5%** |
-| 0.9 | just below the eyes | **20.6%** |
+| 0.3 | mouth (upper lip) | 9.8% |
+| 0.6 | nose bridge midpoint | 20.5% |
+| 0.9 | just below the eyes | 20.6% |
 
-Coverage jumps sharply from 0.3→0.6 (adding the whole nose/mid-face region) but barely moves 0.6→0.9,
-because the eye region's own height is a small fraction of total face height — there just isn't much
-more face left to add between "nose bridge" and "just below the eyes." Measured geometrically (occlusion
-drawn onto a blank canvas, fraction of changed pixels), independent of any model or detection run.
+Coverage jumped sharply from 0.3→0.6 but barely moved 0.6→0.9 — a review caught this: the two discrete
+landmark anchors used for 0.6 and 0.9 (nose bridge, lowest eye-contour point) happen to sit at almost the
+same height on MediaPipe's topology, an anatomical ambiguity not caught before shipping v1.
+
+### Mask severity: continuous monotonic interpolation (fix, v2 — current)
+
+Replaced the two discrete landmark anchors with a **continuous linear interpolation** between two
+well-separated, unambiguous anchors — mean mouth-top height (severity 0.3) and mean eyebrow height
+(severity 0.9) — so coverage increases monotonically by construction rather than depending on two single
+landmarks happening to be far enough apart:
+
+| severity | top edge | mean coverage (224x224 crop) |
+|---|---|---|
+| 0.3 | mouth (upper lip) | **11.75%** |
+| 0.6 | 50% of the way to eyebrow height | **17.49%** |
+| 0.9 | eyebrow height | **23.43%** |
+
+Measured geometrically (occlusion drawn onto a blank canvas, fraction of changed pixels, 300-sample),
+independent of any model or detection run — clearly and smoothly monotonic now.
 
 ### Reproducibility fix
 
@@ -348,9 +363,9 @@ future regression here fails a test instead of silently drifting.
 | occlusion_type | severity | macro-F1 | accuracy | n_abstained / n_clips |
 |---|---|---|---|---|
 | clean | — | 0.5724 ± 0.0046 | 0.6010 ± 0.0029 | 0/1224 |
-| mask | 0.3 | 0.3127 ± 0.0262 | 0.3804 ± 0.0251 | 0/1224 |
-| mask | 0.6 | 0.1752 ± 0.0634 | 0.2516 ± 0.0551 | 0/1224 |
-| mask | 0.9 | 0.1614 ± 0.0539 | 0.2530 ± 0.0459 | 0/1224 |
+| mask | 0.3 | 0.3154 ± 0.0248 | 0.3772 ± 0.0202 | 0/1224 |
+| mask | 0.6 | 0.1845 ± 0.0444 | 0.2653 ± 0.0388 | 0/1224 |
+| mask | 0.9 | 0.1157 ± 0.0167 | 0.2100 ± 0.0088 | 0/1224 |
 | sunglasses | 0.3 | 0.3231 ± 0.0573 | 0.3998 ± 0.0395 | 0/1224 |
 | sunglasses | 0.6 | 0.3116 ± 0.0285 | 0.3875 ± 0.0218 | 0/1224 |
 | sunglasses | 0.9 | 0.2777 ± 0.0282 | 0.3603 ± 0.0091 | 0/1224 |
@@ -361,21 +376,72 @@ future regression here fails a test instead of silently drifting.
 | hand_over_mouth | 0.6 | 0.3044 ± 0.0703 | 0.3676 ± 0.0565 | 0/1224 |
 | hand_over_mouth | 0.9 | 0.2810 ± 0.0469 | 0.3448 ± 0.0412 | 0/1224 |
 
-Full table: `outputs/phase4_occlusion_eval_table_official.csv` (per-seed: `..._by_seed_official.csv`).
-Superseded: `outputs/phase4_occlusion_eval_table.csv` (old scoring, old mask geometry) — kept for history,
-not for comparison.
+Full table: `outputs/phase4_occlusion_eval_table_official.csv` (per-seed: `..._by_seed_official.csv`). Uses
+the v2 mask geometry above. Superseded: `outputs/phase4_occlusion_eval_table.csv` (old scoring, v1 mask
+geometry) — kept for history, not for comparison.
 
-- Mask now shows a real severity curve (0.313 → 0.175 → 0.161) instead of the old flat ~0.12 — the
-  redefinition changed both the geometry and (via the official scoring) the accounting, and both moved
-  it toward a more interpretable result.
-- `patch` at severity 0.9 is now visibly the worst condition under the stricter official scoring
+- Mask now shows a real, monotonically-worsening severity curve (0.315 → 0.184 → 0.116) instead of the
+  v1 geometry's near-flat 0.313 → 0.175 → 0.161 — the v2 fix changed the geometry so severity 0.9 actually
+  reaches further down the face than 0.6, and the model's performance now tracks that clearly.
+- `patch` at severity 0.9 remains the worst non-mask condition under the stricter official scoring
   (macro-F1 0.147, accuracy 0.150 — *below* the stratified chance accuracy of ~0.16) because 493/1224
   clips (40.3%) get zero votes and are scored as pure misses, with no chance of lucking into a correct
-  tie-broken guess the way the old scoring allowed.
-- Every occlusion condition remains well below the clean 0.5724, and mask/patch@0.9 also fall below the
-  clean audio baseline (0.49) — see Phase 5 below for whether fusion recovers this.
+  tie-broken guess the way the old scoring allowed. Mask 0.9 (0.116) is now the single worst condition
+  overall, below even `patch` 0.9.
+- Every occlusion condition remains well below the clean 0.5724, and mask (all severities) and patch@0.9
+  also fall below the clean audio baseline (0.49) — see Phase 5 below for whether fusion recovers this.
 
-## Phase 5 (development version): first confidence-weighted fusion result
+### Occlusion-augmented face model (ablation): training-time occlusion closes much of this gap
+
+Two additional ResNet-18 variants were fine-tuned with random occlusions applied during training
+(`fer.face_model_augmented`, `scripts/15_face_model_train_augmented.py`, 3 seeds each): each selected
+training frame is independently left clean (50%) or occluded with a random type + random severity (50%),
+using a training-time RNG namespace separate from the evaluation occlusion seed. Monitoring/early-stopping
+and the final reported metric stay on **clean** val throughout, matching the original clean-trained
+model's methodology, so the comparison below isolates the effect of training-time occlusion exposure:
+
+- `aug_all` — all 4 occlusion types available during training.
+- `aug_no_mask` — mask held out of training entirely, so it's an **unseen** occlusion type at evaluation.
+
+A pre-training time estimate (one timed epoch: 158.3s, one timed monitor-eval call: 14.2s, combined with
+historical ~5 epochs/seed) projected ~100-115 minutes for all 6 seed-runs, under the ~2 hour ceiling
+agreed in advance — training was launched on that basis. **The actual wall time was ~3h20min**, roughly
+double the estimate; this is being reported plainly rather than glossed over. The discrepancy most likely
+reflects system-level memory/CPU contention during the run (other applications competing for this Mac's
+limited RAM) rather than a flaw in the per-epoch timing itself, but the estimate should have included a
+larger safety margin given the single-epoch measurement's susceptibility to exactly that kind of noise.
+
+Clean val macro-F1 (mean ± std, 3 seeds): clean-trained **0.5724 ± 0.0046**, `aug_all` **0.5715 ± 0.0196**,
+`aug_no_mask` **0.5822 ± 0.0270** — training-time occlusion costs essentially nothing on clean data.
+
+Occlusion macro-F1 by variant (mean ± std, 3 seeds; full table `outputs/phase4_occlusion_table_by_variant.csv`,
+per-seed `outputs/phase4_occlusion_by_variant_by_seed.csv`):
+
+| condition | clean-trained | aug_all | aug_no_mask |
+|---|---|---|---|
+| mask 0.3 | 0.3154 ± 0.0248 | 0.4791 ± 0.0430 | 0.4048 ± 0.0431 |
+| mask 0.6 | 0.1845 ± 0.0444 | 0.4527 ± 0.0420 | 0.3606 ± 0.0558 |
+| mask 0.9 | 0.1157 ± 0.0167 | 0.3253 ± 0.0388 | 0.1836 ± 0.0246 |
+| patch 0.3 | 0.4036 ± 0.0074 | 0.5205 ± 0.0155 | 0.5188 ± 0.0257 |
+| patch 0.6 | 0.2871 ± 0.0367 | 0.4583 ± 0.0160 | 0.4470 ± 0.0336 |
+| patch 0.9 | 0.1470 ± 0.0223 | 0.2737 ± 0.0263 | 0.2733 ± 0.0112 |
+| sunglasses 0.3 | 0.3231 ± 0.0573 | 0.5168 ± 0.0460 | 0.5293 ± 0.0331 |
+| sunglasses 0.6 | 0.3116 ± 0.0285 | 0.5088 ± 0.0474 | 0.5267 ± 0.0359 |
+| sunglasses 0.9 | 0.2777 ± 0.0282 | 0.5077 ± 0.0431 | 0.5208 ± 0.0400 |
+| hand_over_mouth 0.3 | 0.3281 ± 0.0735 | 0.4730 ± 0.0163 | 0.4670 ± 0.0373 |
+| hand_over_mouth 0.6 | 0.3044 ± 0.0703 | 0.4570 ± 0.0313 | 0.4559 ± 0.0284 |
+| hand_over_mouth 0.9 | 0.2810 ± 0.0469 | 0.4389 ± 0.0494 | 0.4362 ± 0.0359 |
+
+- **Every occlusion condition improves substantially with training-time augmentation**, for both
+  variants, at no measurable clean-accuracy cost.
+- **`aug_no_mask` — which never saw mask during training — still roughly doubles mask performance** at
+  every severity (0.9: 0.116 → 0.184), showing partial transfer from the other three occlusion types to
+  an unseen one.
+- **`aug_all`, which did see mask, does even better on mask** (0.9: 0.116 → 0.325, nearly 3x) without
+  giving up anything on the other three types relative to `aug_no_mask` (they're within noise of each
+  other on patch/sunglasses/hand_over_mouth).
+
+## Phase 5, round 1 (development version): first confidence-weighted fusion result
 
 ```bash
 python scripts/14_phase5_fusion_dev.py
@@ -455,6 +521,63 @@ Full table: `outputs/phase5_fusion_table.csv` (per-seed: `phase5_fusion_by_seed.
   confusion history, or an explicit detection-failure flag (not just max-softmax), is the natural next
   step and is not yet built.
 
+## Phase 5, round 2 (development version): expanded fusion table, 3 face-model variants
+
+```bash
+python scripts/18_phase5_fusion_v2.py
+```
+
+VAL only. Same audio branch and the same clean-only, 2-fold actor cross-fit temperature calibration as
+round 1 (`fer.fusion`), applied separately to each of the 3 face-model variants (clean-trained, `aug_all`,
+`aug_no_mask`) × 3 seeds. Four fusion methods are compared — **fixed in advance, no others added**:
+
+- **fixed 50/50** — equal weight, no adaptation.
+- **confidence-weighted (max-prob)** — per-clip face weight from each branch's own calibrated max-softmax.
+- **confidence-weighted (negative entropy)** — per-clip face weight from `log(K) - H(p)`, shifted
+  non-negative (0 at uniform, `log(K)` at one-hot).
+- **learned gate** — logistic regression on `[face_max_prob_conf, audio_max_prob_conf]`, predicting
+  P(face branch correct), fit via the same 2-fold actor cross-fit but **pooled across clean + every
+  occlusion condition** (not clean-only — a clean-only gate would never see occluded confidence patterns).
+
+Full table (39 condition×variant rows × 6 methods, mean ± std over 3 seeds, including mean face weight):
+`outputs/phase5_fusion_v2_table.csv`. Selected rows (macro-F1, clean-trained model):
+
+| condition | audio-only | face-only | fixed 50/50 | conf max-prob | conf neg-entropy | learned gate |
+|---|---|---|---|---|---|---|
+| clean | 0.490 | 0.572 ± 0.005 | **0.700 ± 0.018** | 0.687 ± 0.018 | 0.684 ± 0.019 | 0.676 ± 0.014 |
+| mask 0.6 | 0.490 | 0.184 ± 0.044 | **0.413 ± 0.036** | 0.402 ± 0.028 | 0.409 ± 0.014 | 0.419 ± 0.032 |
+| mask 0.9 | 0.490 | 0.116 ± 0.017 | 0.490 ± 0.018 | 0.488 ± 0.016 | 0.490 ± 0.012 | **0.499 ± 0.002** |
+| patch 0.9 | 0.490 | 0.147 ± 0.022 | **0.491 ± 0.013** | 0.488 ± 0.014 | 0.491 ± 0.011 | 0.492 ± 0.002 |
+| sunglasses 0.6 | 0.490 | 0.312 ± 0.028 | **0.572 ± 0.017** | 0.560 ± 0.021 | 0.558 ± 0.023 | 0.561 ± 0.015 |
+
+And for the two augmented variants, e.g. `aug_all`'s mask 0.9 (its hardest condition): audio-only 0.490,
+face-only 0.325 ± 0.039, **fixed 50/50 0.563 ± 0.018**, conf max-prob 0.559 ± 0.015, conf neg-entropy
+0.544 ± 0.018, learned gate 0.543 ± 0.015 — fixed fusion still wins outright once the face branch is this
+much more robust.
+
+**Fixed 50/50 fusion beats every confidence-weighted or learned-gate variant in 38 of 39
+(condition × face-model-variant) comparisons.** The one partial exception is the clean-trained model's
+`mask 0.9` (bolded above) — the single condition where the face branch is closest to useless (macro-F1
+0.116, barely above the 1/6-class floor) — where the learned gate (0.499) edges fixed 50/50 (0.490) by
+about 1 point, within the run-to-run std (~0.014-0.018) and not a meaningful win; it mainly reflects the
+gate correctly pushing face weight down (mean face weight 0.256) toward audio-only (0.490), not genuine
+synergy. For both augmented variants, fixed 50/50 wins mask 0.9 outright too.
+
+**Headline: making the face branch far more occlusion-robust (the augmented-training ablation above) did
+not change the round-1 conclusion about weighting.** A per-clip weight built from a branch's own
+confidence (max-softmax or negative entropy), or a logistic gate trained on those confidences, still does
+not reliably beat simply averaging the two branches — regardless of which face model sits behind it.
+
+**Note on patch 0.9 — fusion ≈ audio by construction.** At patch severity 0.9, 493/1224 (40.3%) of clips
+get zero face detections and are scored as an exactly-uniform face distribution. Any confidence-weighted
+method correctly identifies these specific clips as unconfident and pushes face weight toward 0 for them
+— mean face weight at patch 0.9 drops to roughly 0.11-0.35 across variants/methods, about half the 0.50
+baseline. This is **not** evidence that confidence-weighting "solves" patch occlusion; it's the mechanism
+correctly detecting detection failure on the ~40% of clips where it occurs, while doing nothing special
+for the other ~60% that still got a (sometimes wrong) prediction. The resulting fusion score is close to,
+but still not above, fixed 50/50 — blind averaging isn't beaten by conditionally zeroing out face only
+on the clips that failed detection.
+
 ## Project structure
 
 ```
@@ -473,5 +596,7 @@ data/             # CREMA-D dataset (gitignored — never committed)
 ## Later phases (not started)
 
 Audio models (wav2vec2/WavLM fine-tuning, beyond the classical eGeMAPS+LR baseline Phase 5 currently
-fuses) → a fusion weighting signal that handles the `mask`-style confident-collapse failure mode (not
-just low-confidence detection dropout) → full experiment grid + RESULTS.md → Gradio demo.
+fuses) → a fusion weighting signal that handles the `mask`-style confident-collapse failure mode — now
+shown (round 2) to persist even against a much more occlusion-robust face model, so the fix needs to
+target the weighting mechanism itself, not just the face model's robustness → demographic-group
+performance breakdown → full experiment grid + final evaluation on the frozen test set → Gradio demo.

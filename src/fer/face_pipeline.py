@@ -148,49 +148,59 @@ def _avg_color(img: np.ndarray, region_frac=(0.15, 0.5, 0.35, 0.65)) -> tuple[in
     return tuple(int(v) for v in patch.mean(axis=0))
 
 
-# Mask severity is defined by VERTICAL EXTENT from real landmark groups,
-# not a continuous scale factor (see fix in the Phase 4 diagnostics round):
-#   0.3 -> mouth and chin only (top edge at the upper lip)
-#   0.6 -> up to the nose bridge midpoint (top edge at landmark 168)
-#   0.9 -> up to just below the eyes (top edge at each eye's lowest point)
+# Mask severity is defined by VERTICAL EXTENT from real landmark groups
+# (fix in the Phase 4 diagnostics round), not a continuous scale factor.
+# First version picked discrete landmark anchors per severity level
+# ("nose bridge" for 0.6, "lowest point of the eye contour" for 0.9) that
+# turned out to sit at nearly the same height on this topology (~20.5%
+# coverage for both) — not "clearly below the eyes." Fixed by making the
+# top edge's height a CONTINUOUS, monotonic interpolation between two
+# landmark-derived anchors that are unambiguously far apart — mean mouth
+# height (severity -> 0.3) and mean eyebrow height (severity -> 0.9) —
+# so coverage increases with severity by construction rather than by
+# hoping two single landmarks happen to be far enough apart. severity=0.6
+# lands at the midpoint, which is close to the nose bridge for most faces
+# but is no longer load-bearing for the ordering guarantee.
 # The bottom/side boundary (cheek -> jaw -> chin) is always the same
 # LOWER_FACE_OVAL contour; severity only moves the top edge up the face.
-_MASK_SEVERITY_LEVELS = {0.3: "mouth_chin", 0.6: "nose_bridge", 0.9: "below_eyes"}
-# Upper-lip subset of MOUTH_OUTLINE (the list interleaves upper then lower lip).
-_MOUTH_TOP = MOUTH_OUTLINE[:10]
+_MOUTH_TOP = MOUTH_OUTLINE[:10]  # upper-lip subset (the list interleaves upper then lower lip)
+_SEVERITY_LO, _SEVERITY_HI = 0.3, 0.9
 
 
-def _mask_top_points(landmarks_478: np.ndarray, level: str) -> np.ndarray:
-    if level == "mouth_chin":
-        return landmarks_478[_MOUTH_TOP]
-    if level == "nose_bridge":
-        return landmarks_478[[LEFT_EYE_INNER, NOSE_BRIDGE_TOP, RIGHT_EYE_INNER]]
-    if level == "below_eyes":
-        left_eye, right_eye = landmarks_478[LEFT_EYE], landmarks_478[RIGHT_EYE]
-        return np.array([left_eye[np.argmax(left_eye[:, 1])], right_eye[np.argmax(right_eye[:, 1])]])
-    raise ValueError(f"unknown mask severity level {level!r}")
+def _mask_top_edge_y(landmarks_478: np.ndarray, severity: float) -> float:
+    mouth_y = float(landmarks_478[_MOUTH_TOP][:, 1].mean())
+    eyebrow_y = float(landmarks_478[LEFT_EYEBROW + RIGHT_EYEBROW][:, 1].mean())
+    t = (severity - _SEVERITY_LO) / (_SEVERITY_HI - _SEVERITY_LO)
+    t = min(1.0, max(0.0, t))
+    return mouth_y - t * (mouth_y - eyebrow_y)  # eyebrow_y < mouth_y (higher up the face)
+
+
+def _mask_top_points(landmarks_478: np.ndarray, severity: float) -> np.ndarray:
+    y = _mask_top_edge_y(landmarks_478, severity)
+    left_x = landmarks_478[LEFT_EYE_INNER][0]
+    mid_x = landmarks_478[NOSE_BRIDGE_TOP][0]
+    right_x = landmarks_478[RIGHT_EYE_INNER][0]
+    return np.array([[left_x, y], [mid_x, y], [right_x, y]])
 
 
 def apply_mask(crop_rgb: np.ndarray, landmarks_478: np.ndarray | None, severity: float) -> np.ndarray:
     """Surgical-mask-style occlusion, fully opaque: a landmark polygon whose
     outer boundary is always the lower-face oval (cheek -> jaw -> chin ->
-    jaw -> cheek), and whose top edge moves up the face with severity (see
-    `_MASK_SEVERITY_LEVELS`). Falls back to a generic lower-face rectangle,
-    with the same three top-edge heights, if no dense landmarks are
-    available (RetinaFace-only fallback)."""
+    jaw -> cheek), and whose top edge moves monotonically up the face with
+    severity (see `_mask_top_edge_y`). Falls back to a generic lower-face
+    rectangle, linearly interpolated the same way, if no dense landmarks
+    are available (RetinaFace-only fallback)."""
     img = Image.fromarray(crop_rgb.copy())
     draw = ImageDraw.Draw(img, "RGBA")
     h, w = crop_rgb.shape[:2]
-    if severity not in _MASK_SEVERITY_LEVELS:
-        raise ValueError(f"mask severity must be one of {sorted(_MASK_SEVERITY_LEVELS)}, got {severity}")
-    level = _MASK_SEVERITY_LEVELS[severity]
     if landmarks_478 is not None:
         oval_pts = landmarks_478[LOWER_FACE_OVAL]
-        top_pts = _mask_top_points(landmarks_478, level)
+        top_pts = _mask_top_points(landmarks_478, severity)
         all_pts = np.vstack([oval_pts, top_pts])
         polygon = _angle_sorted_polygon(all_pts)
     else:
-        top_y = {"mouth_chin": h * 0.62, "nose_bridge": h * 0.45, "below_eyes": h * 0.35}[level]
+        t = min(1.0, max(0.0, (severity - _SEVERITY_LO) / (_SEVERITY_HI - _SEVERITY_LO)))
+        top_y = h * 0.62 - t * (h * 0.62 - h * 0.30)
         bottom_y = h * 0.92
         left_x, right_x = w * 0.15, w * 0.85
         polygon = [(left_x, top_y), (right_x, top_y), (right_x * 1.02, bottom_y), (left_x * 0.98, bottom_y)]
