@@ -1,0 +1,232 @@
+[{"stream_name":"stderr","time":6.365882562,"data":"0.00s - Debugger warning: It seems that frozen modules are being used, which may\n"}
+,{"stream_name":"stderr","time":6.365936457,"data":"0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off\n"}
+,{"stream_name":"stderr","time":6.365943545,"data":"0.00s - to python to disable frozen modules.\n"}
+,{"stream_name":"stderr","time":6.365947724,"data":"0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.\n"}
+,{"stream_name":"stderr","time":6.911557404,"data":"0.00s - Debugger warning: It seems that frozen modules are being used, which may\n"}
+,{"stream_name":"stderr","time":6.911597914,"data":"0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off\n"}
+,{"stream_name":"stderr","time":6.911602409,"data":"0.00s - to python to disable frozen modules.\n"}
+,{"stream_name":"stderr","time":6.911605047,"data":"0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.\n"}
+,{"stream_name":"stdout","time":23.219496213,"data":"torch: 2.11.0+cu130 cuda available: True\n"}
+,{"stream_name":"stdout","time":47.702211203,"data":"private dataset found at: /kaggle/input/datasets/yashashvi4205/fer-project-verification\n"}
+,{"stream_name":"stdout","time":50.595940849,"data":"audio directory found at: /kaggle/input/datasets/ejlok1/cremad/AudioWAV (7442 .wav files)\n"}
+,{"stream_name":"stdout","time":50.595982006,"data":"  (other .wav-containing directories seen: {'/kaggle/input/datasets/yashashvi4205/fer-project-verification/supplementary_audio': 1})\n"}
+,{"stream_name":"stdout","time":50.746585828,"data":"split actors: train=64 val=15 test=12\n"}
+,{"stream_name":"stdout","time":50.746617605,"data":"excluded clips: ['1064_IEO_DIS_MD', '1064_TIE_SAD_XX', '1076_MTI_NEU_XX', '1076_MTI_SAD_XX']\n"}
+,{"stream_name":"stdout","time":50.746624398,"data":"expected canonical clip count: 7438\n"}
+,{"stream_name":"stdout","time":50.947628543,"data":"local canonical count: 7438 | kaggle (main mirror) found: 7442\n"}
+,{"stream_name":"stdout","time":50.947673823,"data":"missing from main mirror: 1 | extra in main mirror: 5\n"}
+,{"stream_name":"stdout","time":50.947679123,"data":"found 1 missing clip(s) in the private dataset's supplementary_audio/: ['1040_ITH_SAD_XX.wav']\n"}
+,{"stream_name":"stdout","time":88.096374018,"data":"checksummed 7443 available files in 37.3s\n"}
+,{"stream_name":"stdout","time":88.096417911,"data":"\n"}
+,{"stream_name":"stdout","time":88.096423205,"data":"--- VERIFICATION REPORT ---\n"}
+,{"stream_name":"stdout","time":88.096427727,"data":"still missing (not in main mirror or supplement): 0\n"}
+,{"stream_name":"stdout","time":88.096437395,"data":"checksum mismatches: 0\n"}
+,{"stream_name":"stdout","time":88.096454731,"data":"extra files in main mirror (not fatal, informational): 5 -\u003e ['1040_ITH_SAD_X.wav', '1064_IEO_DIS_MD.wav', '1064_TIE_SAD_XX.wav', '1076_MTI_NEU_XX.wav', '1076_MTI_SAD_XX.wav']\n"}
+,{"stream_name":"stdout","time":88.09646093,"data":"supplied from the private dataset's supplementary_audio/: ['1040_ITH_SAD_XX.wav']\n"}
+,{"stream_name":"stdout","time":88.09646538,"data":"\n"}
+,{"stream_name":"stdout","time":88.096469992,"data":"VERIFICATION PASSED: Kaggle audio (main mirror + supplement) matches local files exactly (count, filenames, checksums).\n"}
+,{"stream_name":"stdout","time":88.145107021,"data":"canonical clips available: 7438\n"}
+,{"stream_name":"stdout","time":88.145167296,"data":"train: 5236 clips, 64 actors\n"}
+,{"stream_name":"stdout","time":88.145176694,"data":"val:   1224 clips, 15 actors\n"}
+,{"stream_name":"stdout","time":88.145182519,"data":"test actors excluded from this notebook entirely: 12 actors\n"}
+,{"stream_name":"stderr","time":88.824969105,"data":"Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.\n"}
+,{"stream_name":"stderr","time":88.825004152,"data":"\n"}
+,{"stream_name":"stderr","time":88.825008569,"data":"Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.\n"}
+,{"stream_name":"stdout","time":89.303917095,"data":"device: cuda\n"}
+,{"stream_name":"stdout","time":89.303958032,"data":"\n"}
+,{"stream_name":"stdout","time":89.303963157,"data":"======================================================================\n"}
+,{"stream_name":"stdout","time":89.303967561,"data":"SEED 0\n"}
+,{"stream_name":"stdout","time":89.303971362,"data":"======================================================================\n"}
+,{"stream_name":"stderr","time":102.221759894,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":102.221802667,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stderr","time":102.221808235,"data":"\n"}
+,{"stream_name":"stderr","time":102.22181226,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":102.221816672,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stdout","time":346.57262591,"data":"  seed=0 epoch=0 train_loss=1.5928 val_macro_f1=0.2924\n"}
+,{"stream_name":"stderr","time":347.082993701,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":347.083029306,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stderr","time":347.083035385,"data":"\n"}
+,{"stream_name":"stderr","time":347.083039763,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":347.083044463,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stdout","time":595.638800704,"data":"  seed=0 epoch=1 train_loss=1.2840 val_macro_f1=0.5744\n"}
+,{"stream_name":"stderr","time":596.090456569,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":596.090505572,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stderr","time":596.090512181,"data":"\n"}
+,{"stream_name":"stderr","time":596.09051717,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":596.090522753,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stdout","time":844.723606094,"data":"  seed=0 epoch=2 train_loss=0.9544 val_macro_f1=0.6073\n"}
+,{"stream_name":"stderr","time":845.081611804,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":845.081687154,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stderr","time":845.081708925,"data":"\n"}
+,{"stream_name":"stderr","time":845.081713626,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":845.081717543,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stdout","time":1093.752881236,"data":"  seed=0 epoch=3 train_loss=0.7510 val_macro_f1=0.6740\n"}
+,{"stream_name":"stderr","time":1094.127047857,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":1094.12710815,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stderr","time":1094.127115312,"data":"\n"}
+,{"stream_name":"stderr","time":1094.127120333,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":1094.127137277,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stdout","time":1343.337183224,"data":"  seed=0 epoch=4 train_loss=0.6438 val_macro_f1=0.6940\n"}
+,{"stream_name":"stderr","time":1343.688372588,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":1343.688417721,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stderr","time":1343.688424076,"data":"\n"}
+,{"stream_name":"stderr","time":1343.688428796,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":1343.688434172,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stdout","time":1591.772044785,"data":"  seed=0 epoch=5 train_loss=0.5581 val_macro_f1=0.6729\n"}
+,{"stream_name":"stderr","time":1592.111502612,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":1592.111534841,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stderr","time":1592.111539981,"data":"\n"}
+,{"stream_name":"stderr","time":1592.111543457,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":1592.111547176,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stdout","time":1840.898544813,"data":"  seed=0 epoch=6 train_loss=0.5198 val_macro_f1=0.6769\n"}
+,{"stream_name":"stderr","time":1841.263430388,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":1841.263493804,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stderr","time":1841.263501898,"data":"\n"}
+,{"stream_name":"stderr","time":1841.263507064,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":1841.263525802,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stdout","time":2088.641285039,"data":"  seed=0 epoch=7 train_loss=0.4503 val_macro_f1=0.6851\n"}
+,{"stream_name":"stdout","time":2088.641321826,"data":"  seed=0: early stopping at epoch 7 (best epoch 4, best val_macro_f1=0.6940)\n"}
+,{"stream_name":"stderr","time":2089.046674224,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":2089.046735387,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stderr","time":2089.046742726,"data":"\n"}
+,{"stream_name":"stderr","time":2089.046747536,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":2089.046752459,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stdout","time":2113.282557673,"data":"seed=0 FINAL val_macro_f1=0.6940 best_epoch=4 -\u003e /kaggle/working/wavlm_base_plus_seed0.pt\n"}
+,{"stream_name":"stdout","time":2113.282607571,"data":"\n"}
+,{"stream_name":"stdout","time":2113.282613559,"data":"======================================================================\n"}
+,{"stream_name":"stdout","time":2113.282618149,"data":"SEED 1\n"}
+,{"stream_name":"stdout","time":2113.282622208,"data":"======================================================================\n"}
+,{"stream_name":"stderr","time":2114.29802551,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":2114.2980707,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stderr","time":2114.29808108,"data":"\n"}
+,{"stream_name":"stderr","time":2114.298084759,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":2114.298103837,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stdout","time":2363.033170296,"data":"  seed=1 epoch=0 train_loss=1.5708 val_macro_f1=0.4448\n"}
+,{"stream_name":"stderr","time":2363.394408885,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":2363.394448056,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stderr","time":2363.39445314,"data":"\n"}
+,{"stream_name":"stderr","time":2363.394457308,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":2363.394462014,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stdout","time":2611.192569876,"data":"  seed=1 epoch=1 train_loss=1.2291 val_macro_f1=0.6103\n"}
+,{"stream_name":"stderr","time":2611.631492046,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":2611.631530601,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stderr","time":2611.631535699,"data":"\n"}
+,{"stream_name":"stderr","time":2611.631539963,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":2611.631557545,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stdout","time":2859.661804081,"data":"  seed=1 epoch=2 train_loss=0.9596 val_macro_f1=0.5967\n"}
+,{"stream_name":"stderr","time":2860.004985359,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":2860.005022817,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stderr","time":2860.005028048,"data":"\n"}
+,{"stream_name":"stderr","time":2860.005032272,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":2860.005037103,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stdout","time":3108.204838307,"data":"  seed=1 epoch=3 train_loss=0.7651 val_macro_f1=0.6582\n"}
+,{"stream_name":"stderr","time":3108.579386159,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":3108.579434664,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stderr","time":3108.579439324,"data":"\n"}
+,{"stream_name":"stderr","time":3108.579456525,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":3108.57946246,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stdout","time":3357.515730645,"data":"  seed=1 epoch=4 train_loss=0.6355 val_macro_f1=0.7124\n"}
+,{"stream_name":"stderr","time":3357.90230276,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":3357.902336661,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stderr","time":3357.902341644,"data":"\n"}
+,{"stream_name":"stderr","time":3357.902345776,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":3357.902350652,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stdout","time":3605.886049746,"data":"  seed=1 epoch=5 train_loss=0.5513 val_macro_f1=0.6855\n"}
+,{"stream_name":"stderr","time":3606.231252765,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":3606.231305225,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stderr","time":3606.231312321,"data":"\n"}
+,{"stream_name":"stderr","time":3606.231316743,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":3606.231321881,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stdout","time":3853.992132034,"data":"  seed=1 epoch=6 train_loss=0.4945 val_macro_f1=0.6530\n"}
+,{"stream_name":"stderr","time":3854.331043939,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":3854.331138248,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stderr","time":3854.331147477,"data":"\n"}
+,{"stream_name":"stderr","time":3854.331151255,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":3854.331154918,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stdout","time":4102.155054522,"data":"  seed=1 epoch=7 train_loss=0.4463 val_macro_f1=0.6965\n"}
+,{"stream_name":"stdout","time":4102.15509293,"data":"  seed=1: early stopping at epoch 7 (best epoch 4, best val_macro_f1=0.7124)\n"}
+,{"stream_name":"stderr","time":4102.559009287,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":4102.559048565,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stderr","time":4102.559053625,"data":"\n"}
+,{"stream_name":"stderr","time":4102.559057842,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":4102.55906257,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stdout","time":4126.922492897,"data":"seed=1 FINAL val_macro_f1=0.7124 best_epoch=4 -\u003e /kaggle/working/wavlm_base_plus_seed1.pt\n"}
+,{"stream_name":"stdout","time":4126.922546822,"data":"\n"}
+,{"stream_name":"stdout","time":4126.922553339,"data":"======================================================================\n"}
+,{"stream_name":"stdout","time":4126.922558326,"data":"SEED 2\n"}
+,{"stream_name":"stdout","time":4126.922563781,"data":"======================================================================\n"}
+,{"stream_name":"stderr","time":4127.950794827,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":4127.950834587,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stderr","time":4127.950838322,"data":"\n"}
+,{"stream_name":"stderr","time":4127.950841199,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":4127.950844281,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stdout","time":4375.91513728,"data":"  seed=2 epoch=0 train_loss=1.6078 val_macro_f1=0.4281\n"}
+,{"stream_name":"stderr","time":4376.300318342,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":4376.300353689,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stderr","time":4376.30035917,"data":"\n"}
+,{"stream_name":"stderr","time":4376.300363188,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":4376.300367738,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stdout","time":4625.21792614,"data":"  seed=2 epoch=1 train_loss=1.2218 val_macro_f1=0.5378\n"}
+,{"stream_name":"stderr","time":4625.646486745,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":4625.646536438,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stderr","time":4625.646543082,"data":"\n"}
+,{"stream_name":"stderr","time":4625.646547458,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":4625.646552189,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stdout","time":4874.215043798,"data":"  seed=2 epoch=2 train_loss=0.9623 val_macro_f1=0.6455\n"}
+,{"stream_name":"stderr","time":4874.582145402,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":4874.582193056,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stderr","time":4874.582199404,"data":"\n"}
+,{"stream_name":"stderr","time":4874.582203737,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":4874.582208211,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stdout","time":5122.517334616,"data":"  seed=2 epoch=3 train_loss=0.7646 val_macro_f1=0.6831\n"}
+,{"stream_name":"stderr","time":5122.912415329,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":5122.912461551,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stderr","time":5122.912468056,"data":"\n"}
+,{"stream_name":"stderr","time":5122.912472279,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":5122.912477882,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stdout","time":5371.429198147,"data":"  seed=2 epoch=4 train_loss=0.6405 val_macro_f1=0.7016\n"}
+,{"stream_name":"stderr","time":5371.793643119,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":5371.793715058,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stderr","time":5371.793722213,"data":"\n"}
+,{"stream_name":"stderr","time":5371.793727123,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":5371.793731677,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stdout","time":5621.312237029,"data":"  seed=2 epoch=5 train_loss=0.5666 val_macro_f1=0.6457\n"}
+,{"stream_name":"stderr","time":5621.661399233,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":5621.661476946,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stderr","time":5621.661486822,"data":"\n"}
+,{"stream_name":"stderr","time":5621.661489443,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":5621.661511881,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stdout","time":5870.014560028,"data":"  seed=2 epoch=6 train_loss=0.4967 val_macro_f1=0.6831\n"}
+,{"stream_name":"stderr","time":5870.365484296,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":5870.365522791,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stderr","time":5870.365541247,"data":"\n"}
+,{"stream_name":"stderr","time":5870.365546939,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":5870.365552662,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stdout","time":6118.09905015,"data":"  seed=2 epoch=7 train_loss=0.4571 val_macro_f1=0.6863\n"}
+,{"stream_name":"stdout","time":6118.099087772,"data":"  seed=2: early stopping at epoch 7 (best epoch 4, best val_macro_f1=0.7016)\n"}
+,{"stream_name":"stderr","time":6118.512475763,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":6118.512513948,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stderr","time":6118.512519941,"data":"\n"}
+,{"stream_name":"stderr","time":6118.512524565,"data":"/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py:6409: UserWarning: Support for mismatched key_padding_mask and attn_mask is deprecated. Use same type for both instead.\n"}
+,{"stream_name":"stderr","time":6118.512529263,"data":"  key_padding_mask = _canonical_mask(\n"}
+,{"stream_name":"stdout","time":6143.01886031,"data":"seed=2 FINAL val_macro_f1=0.7016 best_epoch=4 -\u003e /kaggle/working/wavlm_base_plus_seed2.pt\n"}
+,{"stream_name":"stdout","time":6143.018899983,"data":"\n"}
+,{"stream_name":"stdout","time":6143.018911459,"data":"Saved per-clip VAL probabilities (3672 rows, 3 seeds) to /kaggle/working/wavlm_val_probs.csv\n"}
+,{"stream_name":"stdout","time":6143.039569746,"data":"VAL macro-F1 across 3 seeds: 0.7027 +/- 0.0076 (per-seed: ['0.6940', '0.7124', '0.7016'])\n"}
+,{"stream_name":"stdout","time":6143.039604527,"data":"\n"}
+,{"stream_name":"stdout","time":6143.039610832,"data":"Files to download from /kaggle/working/ :\n"}
+,{"stream_name":"stdout","time":6143.039616001,"data":"  __notebook__.ipynb (0.1 MB)\n"}
+,{"stream_name":"stdout","time":6143.039621248,"data":"  wavlm_base_plus_seed0.pt (378.8 MB)\n"}
+,{"stream_name":"stdout","time":6143.039625596,"data":"  wavlm_base_plus_seed1.pt (378.8 MB)\n"}
+,{"stream_name":"stdout","time":6143.039630054,"data":"  wavlm_base_plus_seed2.pt (378.8 MB)\n"}
+,{"stream_name":"stdout","time":6143.039634483,"data":"  wavlm_seed_summary.csv (0.0 MB)\n"}
+,{"stream_name":"stdout","time":6143.039639145,"data":"  wavlm_val_probs.csv (0.6 MB)\n"}
+,{"stream_name":"stderr","time":6148.983088211,"data":"/usr/local/lib/python3.13/dist-packages/mistune.py:435: SyntaxWarning: invalid escape sequence '\\|'\n"}
+,{"stream_name":"stderr","time":6148.983153675,"data":"  cells[i][c] = re.sub('\\\\\\\\\\|', '|', cell)\n"}
+,{"stream_name":"stderr","time":6149.136809586,"data":"/usr/local/lib/python3.13/dist-packages/nbconvert/filters/filter_links.py:36: SyntaxWarning: invalid escape sequence '\\_'\n"}
+,{"stream_name":"stderr","time":6149.136844176,"data":"  text = re.sub(r'_', '\\_', text) # Escape underscores in display text\n"}
+,{"stream_name":"stderr","time":6149.872189138,"data":"[NbConvertApp] Converting notebook __notebook__.ipynb to notebook\n"}
+,{"stream_name":"stderr","time":6149.97955038,"data":"[NbConvertApp] Writing 153086 bytes to __notebook__.ipynb\n"}
+,{"stream_name":"stderr","time":6152.518133687,"data":"[NbConvertApp] Converting notebook __notebook__.ipynb to html\n"}
+,{"stream_name":"stderr","time":6153.10760929,"data":"[NbConvertApp] Writing 467627 bytes to __results__.html\n"}
+]

@@ -281,3 +281,82 @@ not the usual 3-seed mean.** The bootstrap CIs account for actor-sampling uncert
 uncertainty — a 3-seed version of this analysis could shift these point estimates and CIs.
 
 Full tables: `outputs/phase_demographic_bootstrap_sex.csv`, `..._age.csv`, `..._age_change.csv`.
+
+## Phase 5, round 6 (development): WavLM audio branch, tuned eGeMAPS, and WavLM fusion
+
+Three pieces, all VAL only, all training-free locally (WavLM was fine-tuned on Kaggle; see
+`README.md`'s WavLM section for that run). `scripts/22_wavlm_rescore_and_tuned_egemaps.py`,
+`scripts/23_phase5_fusion_wavlm.py`.
+
+### 1. WavLM re-scored locally, identical metric code to eGeMAPS
+
+The val clip set is **confirmed identical** to eGeMAPS's: same 1,224 clips, same 15 val actors, for
+every one of the 3 seeds, with an explicit assertion that no test actor appears. Re-scoring locally
+(`sklearn.metrics.f1_score`/`accuracy_score`/`confusion_matrix`, no abstention — WavLM never abstains)
+reproduces the Kaggle-reported numbers **exactly** (diff = 0.0000 for all 3 seeds):
+
+| seed | macro-F1 (local) | macro-F1 (Kaggle-reported) | accuracy | val-actor bootstrap 95% CI |
+|---|---|---|---|---|
+| 0 | 0.6940 | 0.6940 | 0.7002 | [0.640, 0.743] |
+| 1 | 0.7124 | 0.7124 | 0.7116 | [0.661, 0.763] |
+| 2 | 0.7016 | 0.7016 | 0.7067 | [0.635, 0.760] |
+| **mean ± std** | **0.7027 ± 0.0076** | — | **0.7062 ± 0.0047** | — |
+
+Per-class F1 (mean ± std over 3 seeds): anger 0.859±0.017, disgust 0.680±0.009, fear 0.571±0.010,
+happy 0.761±0.020, neutral 0.773±0.029, sad 0.572±0.015. Full per-seed confusion matrices:
+`outputs/confusion_matrix_wavlm_seed{0,1,2}.csv`. All three bootstrap CIs are wide relative to the
+point estimate (±0.05-0.06) at only 15 val actors — standard caveat for any val-actor estimate in this
+project.
+
+### 2. Tuning asymmetry fixed: eGeMAPS LR's C tuned on val
+
+Every prior round left eGeMAPS at its original, never-tuned `C=1.0` while WavLM's architecture/training
+hyperparameters were always chosen via early stopping on val macro-F1 — an unfair comparison. Small grid
+search (`C ∈ {0.01, 0.03, 0.1, 0.3, 1, 3, 10, 30, 100}`, same train/val features, same deterministic
+`lbfgs` solver — std ≈ 0 across seeds, as established in Phase 3):
+
+| variant | C | val macro-F1 | val accuracy |
+|---|---|---|---|
+| untuned | 1.0 | 0.4903 | 0.4926 |
+| **tuned** | **0.3** | **0.4950** | **0.4975** |
+
+Tuning buys a small improvement (+0.0047 macro-F1) — eGeMAPS's own hyperparameter was already close to
+optimal in this grid, so the earlier asymmetry wasn't masking a large gap. **The much bigger gap is
+between eGeMAPS and WavLM themselves**: tuned eGeMAPS (0.495) vs. WavLM (0.703 ± 0.008) — WavLM
+outperforms eGeMAPS by about +0.21 macro-F1 on the same val clips. Both numbers (untuned and tuned) are
+reported side by side in `README.md`; "eGeMAPS" elsewhere in this project now means the **tuned**
+version unless stated otherwise.
+
+### 3. Fusion re-run with WavLM as the audio branch (all 3 face variants, same pre-registered methods)
+
+Same four fusion methods (`fixed_5050`, `conf_maxprob`, `conf_negentropy`, `learned_gate`), same
+temperature-calibration and gate cross-fit methodology as rounds 2-3, with WavLM substituted for the
+classical audio branch. WavLM's 3 seeds are paired with the face models' 3 seeds (seed *i* audio with
+seed *i* face) rather than reused across seeds as the deterministic eGeMAPS branch was.
+
+**Pooled over all 12 occlusion conditions (excludes clean), mean macro-F1 across methods:**
+
+| face variant | audio-only (WavLM) | face-only | fixed 50/50 | conf-maxprob | conf-negentropy | learned gate |
+|---|---|---|---|---|---|---|
+| clean-trained | 0.703 | 0.273 | **0.706** | 0.702 | 0.702 | 0.681 |
+| aug_all | 0.703 | 0.451 | **0.741** | 0.738 | 0.737 | 0.711 |
+| aug_no_mask | 0.703 | 0.427 | **0.735** | 0.731 | 0.730 | 0.698 |
+
+Fixed 50/50 is again the best fusion method on average — the same pattern as the eGeMAPS-audio rounds
+holds with a much stronger audio branch.
+
+**Does fixed fusion beat audio-only in every occlusion condition? Not for the clean-trained face.**
+Per-condition (13 conditions including clean), fixed 50/50 beats WavLM-only in:
+- **aug_all: 13/13** conditions
+- **aug_no_mask: 13/13** conditions
+- **clean-trained: 10/13** conditions — it *loses* to audio-only under `mask` at severity 0.3
+  (−0.014), `mask` at 0.6 (**−0.046**, the worst case), and ties at `mask` 0.9 (+0.0003) and `patch` 0.9
+  (−0.0007).
+
+**Why clean-trained loses here but didn't as clearly against eGeMAPS:** WavLM (≈0.70) is a much
+stronger audio branch than eGeMAPS (≈0.49-0.50), so averaging it 50/50 with a face branch that collapses
+under mask (clean-trained face-only macro-F1 crashes to 0.115-0.184 under `mask` 0.6-0.9) pulls the
+fused score down much further than it would with a weaker audio branch. This is the clearest evidence
+yet in this project that **occlusion-augmented training (`aug_all`/`aug_no_mask`) is not just a nice-to-
+have — it's what keeps fixed averaging from actively hurting once the audio branch is strong.** Full
+per-seed and aggregate tables: `outputs/phase5_fusion_wavlm_by_seed.csv`, `..._table.csv`.

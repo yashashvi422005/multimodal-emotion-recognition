@@ -8,17 +8,24 @@ only script permitted to touch the test set, and it must implement exactly what'
 deviation discovered necessary while writing it must be logged and justified in this file, not silently
 applied.
 
-## Models (no retraining required for this plan)
+## Models (no retraining required for this plan) — LOCKED as of round 6
 
-- **Audio, classical**: eGeMAPS features + StandardScaler + LogisticRegression, the exact fitted Phase 3
-  pipeline (refit once on train actors, deterministic, `std ~= 0` across seeds). No seed variation.
+- **Audio, classical (eGeMAPS)**: eGeMAPS features + StandardScaler + LogisticRegression, the exact
+  fitted Phase 3 pipeline, **tuned**: `C=0.3` (chosen by a small grid search, `C ∈ {0.01...100}`, on
+  VAL macro-F1 — see `RESULTS.md` round 6 and `outputs/egemaps_C_tuning_grid.csv`), refit once on train
+  actors, deterministic, `std ~= 0` across seeds. No seed variation. The earlier untuned `C=1.0` run is
+  kept in `outputs/egemaps_tuned_vs_untuned.csv` for the record but is **not** used for the test-set
+  evaluation — tuned eGeMAPS is what "eGeMAPS" means from here on.
 - **Audio, WavLM**: `microsoft/wavlm-base-plus` fine-tuned (frozen CNN feature encoder, small
   classification head), trained on TRAIN actors, early-stopped on VAL actors' macro-F1, 3 seeds
   (`notebooks/wavlm_finetune_kaggle.ipynb`, run on Kaggle — see that notebook and the project README for
-  the exact procedure). Checkpoints and val-set probabilities are produced on Kaggle and downloaded into
-  this project; **the Kaggle run never touches test actors** (enforced by an assertion inside the
-  notebook). This plan's test-set evaluation loads those 3 already-trained checkpoints for inference
-  only — no retraining happens as part of this plan, same as the face models.
+  the exact procedure). **Training complete**: 3 checkpoints in `models/wavlm/` (gitignored, local
+  only), val-set probabilities in `outputs/wavlm_val_probs.csv`, re-scored locally and confirmed
+  identical to the Kaggle-reported numbers (`RESULTS.md` round 6). **The Kaggle run never touched test
+  actors** (enforced by an assertion inside the notebook, confirmed again locally by checking the
+  downloaded val probabilities' actor set against the official split). This plan's test-set evaluation
+  loads those 3 already-trained checkpoints for inference only — no retraining happens as part of this
+  plan, same as the face models.
 - **Face**, three variants, each already trained on train actors only (val/early-stopping used val
   actors only; test actors were never seen by any of the three during training, monitoring, or model
   selection), 3 seeds each, existing checkpoints:
@@ -123,3 +130,10 @@ implement exactly the plan above. No test-set code has been executed as part of 
 WavLM — the Kaggle notebook itself never touches test actors (see
 `notebooks/wavlm_finetune_kaggle.ipynb`), so training it is not a test-set touch and does not require a
 separate pre-registration update once it's done; this document's plan already covers it.
+
+**As of round 6, every model this plan needs is locked and present**: tuned eGeMAPS (`C=0.3`), WavLM (3
+checkpoints + val probabilities, re-scored and verified against the Kaggle run), and the 3 face-model
+variants (clean-trained, `aug_all`, `aug_no_mask`, 3 seeds each). All 6 fusion methods have been
+exercised end-to-end on VAL for both audio branches (`RESULTS.md` rounds 2-3 for eGeMAPS, round 6 for
+WavLM). **No test-set code has been run.** `evaluate.py --final` has not yet been written; writing it is
+the only remaining step before this plan executes, and it will not start until explicitly requested.
