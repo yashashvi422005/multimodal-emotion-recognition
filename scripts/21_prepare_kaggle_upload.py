@@ -1,10 +1,15 @@
 #!/usr/bin/env python
 """Generates the small private-dataset payload for the Kaggle WavLM step:
 splits/split_v1.json (copy), the excluded-clips list (the 4 clips
-documented in README.md's "Known upstream data quirks" section), and an
-MD5 checksum list of the local canonical 7,438-clip AudioWAV set. These
-three files let the Kaggle notebook verify its copy of CREMA-D's audio
-matches this project's local files exactly before any training happens.
+documented in README.md's "Known upstream data quirks" section), an MD5
+checksum list of the local canonical 7,438-clip AudioWAV set, and a
+supplementary_audio/ folder holding local copies of any canonical clip
+known to be missing from the public ejlok1/cremad mirror (currently just
+1040_ITH_SAD_XX, discovered when the notebook's verification step first
+ran against that mirror). These let the Kaggle notebook verify its copy
+of CREMA-D's audio matches this project's local files exactly -- using
+the supplement for any clip the public mirror lacks -- before any
+training happens.
 
 Usage:
     python scripts/21_prepare_kaggle_upload.py
@@ -34,6 +39,11 @@ EXCLUDED_CLIPS = [
     {"clip_id": "1076_MTI_NEU_XX", "reason": "degenerate/corrupt video (~0.07s); excluded project-wide for consistency even though audio is intact"},
     {"clip_id": "1076_MTI_SAD_XX", "reason": "\"Media offline\" placeholder slate, not real footage; failed face detection on all sampled frames"},
 ]
+
+# Canonical clips confirmed (by running the Kaggle notebook's verification step)
+# to be missing from the public ejlok1/cremad mirror. Supplied locally instead,
+# via supplementary_audio/, and checksum-verified the same as every other file.
+MIRROR_GAPS = ["1040_ITH_SAD_XX"]
 
 
 def main() -> None:
@@ -77,11 +87,22 @@ def main() -> None:
     checksums_df.to_csv(checksums_path, index=False)
     print(f"wrote {checksums_path} ({len(checksums_df)} checksums)")
 
+    supp_dir = OUT_DIR / "supplementary_audio"
+    supp_dir.mkdir(exist_ok=True)
+    for clip_id in MIRROR_GAPS:
+        assert clip_id in set(metadata_df["clip_id"]), f"{clip_id} is in MIRROR_GAPS but not in the canonical clip set"
+        src = audio_dir / f"{clip_id}.wav"
+        assert src.exists(), f"MIRROR_GAPS clip {clip_id} has no local AudioWAV file at {src}"
+        dst = supp_dir / f"{clip_id}.wav"
+        shutil.copy(src, dst)
+        print(f"copied supplementary audio: {src} -> {dst}")
+
     manifest = {
         "canonical_clip_count": len(metadata_df),
         "n_excluded_clips": len(EXCLUDED_CLIPS),
         "n_checksums": len(checksums_df),
-        "files": ["split_v1.json", "excluded_clips.json", "audio_md5_checksums.csv"],
+        "mirror_gaps": MIRROR_GAPS,
+        "files": ["split_v1.json", "excluded_clips.json", "audio_md5_checksums.csv", "supplementary_audio/"],
     }
     (OUT_DIR / "MANIFEST.json").write_text(json.dumps(manifest, indent=2))
     print(f"wrote {OUT_DIR / 'MANIFEST.json'}")
