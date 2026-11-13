@@ -614,6 +614,21 @@ from the augmented-training ablation: training-time occlusion doesn't just impro
 isolation, it also removes fusion's worst failure mode (fusion dragging below audio-only), because the
 face branch no longer collapses into a confidently-wrong answer under mask.
 
+## Demographic fairness check: 5-fold actor CV (val+train actors, clean clips only)
+
+```bash
+python scripts/19_demographic_cv.py
+```
+
+Full writeup and tables: `RESULTS.md`, Phase 5 round 4. Summary: actor-level 5-fold CV over the 79
+non-test actors, scope-reduced to **1 seed per fold** (10 face-model training runs instead of the full
+spec's 30) after a pre-run estimate put the full 3-seeds/fold version at 10-17 hours on this Mac — agreed
+with the user before launching; actual wall time was ~4.2 hours. Reports macro-F1 by sex, age band, and
+race (groups with fewer than 3 actors excluded — only `Race=Unknown`, n=1, triggers this). Headline: a
+consistent sex gap favoring female actors across every method; age and race patterns are directionally
+suggestive but the smallest groups (60+, n=4; Asian, n=6) need a multi-seed re-check before being treated
+as confirmed effects.
+
 ## Final evaluation plan (pre-registered, not yet executed)
 
 See `FINAL_EVAL_PLAN.md` — committed before any test-set code runs. Specifies the exact models (all 3

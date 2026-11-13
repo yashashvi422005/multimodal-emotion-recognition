@@ -140,3 +140,80 @@ audio-only), because the face branch no longer collapses into a confidently-wron
 
 *(Val only, development-stage. No test-set numbers anywhere in this round. See `FINAL_EVAL_PLAN.md` for
 the pre-registered plan for the eventual test-set run — not yet executed.)*
+
+## Phase 5, round 4 (development): demographic fairness check, 5-fold actor CV
+
+**Scope reduction (agreed before running):** the full spec (2 face variants × 5 folds × 3 seeds = 30
+face-model training runs) was estimated at 10-17 hours on this Mac. Reduced to **1 seed per fold** (10
+training runs) — actual wall time **~4.2 hours**. This trades away mean±std for this analysis only; every
+number below is a single seed (seed 0), not the usual 3-seed mean. That limitation applies to this section
+only — every other result in this project still uses 3 seeds.
+
+**Method:** actor-level 5-fold CV over the 79 non-test actors (train+val combined), `scripts/19_demographic_cv.py`.
+Each fold holds out ~16 actors; the fold's own training actors are further split 80/20 (by sorted actor
+id) into inner-train/inner-monitor, so early stopping never sees the actors a fold is finally scored on.
+Every one of the 79 actors is evaluated exactly once, by a model (face or audio) that never saw them
+during training, monitoring, or model selection. **Clean clips only** — this checks base-task fairness,
+not occlusion robustness. Fixed 50/50 fusion uses raw, uncalibrated softmax probabilities (no temperature
+scaling, no cross-fit) — a deliberate simplification given the scope, noted here rather than silently
+applied, since the confidence-weighted/gate methods' calibration machinery would have added meaningfully
+more training time per fold for a check that only asked about fixed fusion.
+
+Overall OOF macro-F1 (pooled across all 5 folds, sanity check against the main val-only numbers — note
+this is a different actor set and a single seed, so not directly comparable to earlier rounds):
+
+| method | macro-F1 |
+|---|---|
+| audio_only | 0.5061 |
+| face_only (clean-trained) | 0.5367 |
+| face_only (aug_all) | 0.5487 |
+| fusion_clean (fixed 50/50) | 0.6487 |
+| fusion_aug_all (fixed 50/50) | 0.6611 |
+
+### By sex (n actors)
+
+| sex | n actors | audio-only | face (clean) | face (aug_all) | fusion (clean) | fusion (aug_all) |
+|---|---|---|---|---|---|---|
+| Female | 38 | 0.512 | 0.556 | 0.566 | 0.662 | **0.677** |
+| Male | 41 | 0.499 | 0.519 | 0.532 | 0.636 | 0.646 |
+
+Female actors score higher under every single method, by a consistent margin (~0.01-0.04 absolute).
+
+### By age band (n actors)
+
+| age band | n actors | audio-only | face (clean) | face (aug_all) | fusion (clean) | fusion (aug_all) |
+|---|---|---|---|---|---|---|
+| ≤30 | 32 | 0.507 | 0.569 | 0.611 | 0.677 | **0.707** |
+| 31-45 | 28 | 0.509 | 0.519 | 0.519 | 0.630 | 0.641 |
+| 46-60 | 15 | 0.502 | 0.492 | 0.477 | 0.621 | 0.612 |
+| 60+ | 4 | 0.485 | 0.518 | 0.479 | 0.654 | 0.614 |
+
+Performance on the face branch and fusion generally declines with age, most clearly for the ≤30 group
+being the strongest across the board. **The 60+ row (only 4 actors) is noisy** — `face_only_aug_all`
+scoring *below* `face_only_clean` there (0.479 vs. 0.518) likely reflects single-seed, small-sample
+variance rather than a real effect; it shouldn't be read as "augmentation hurts older actors" without a
+multi-seed re-check.
+
+### By race (n actors; "Unknown", n=1, excluded below the n≥3 threshold)
+
+| race | n actors | audio-only | face (clean) | face (aug_all) | fusion (clean) | fusion (aug_all) |
+|---|---|---|---|---|---|---|
+| African American | 19 | 0.499 | 0.534 | 0.549 | 0.660 | 0.665 |
+| Asian | 6 | 0.489 | **0.590** | 0.574 | **0.709** | 0.702 |
+| Caucasian | 53 | 0.508 | 0.530 | 0.544 | 0.638 | 0.654 |
+
+Asian actors (smallest included group, n=6) score highest on face-only and fusion in this single-seed run
+— **worth flagging as a small-sample result, not a confirmed effect**, given n=6 actors and no seed
+averaging here. African American and Caucasian actors score similarly to each other on fusion, both
+somewhat below Asian.
+
+**Headline:** there is a real, consistent sex gap (female actors score higher on every method) that's
+unlikely to be single-seed noise given it holds the same direction across all 5 methods. The age and race
+patterns are directionally interesting (younger actors do best; the two largest race groups are similar
+to each other) but the smallest groups (60+, Asian) need a multi-seed re-check before treating their
+numbers as more than suggestive — this analysis's 1-seed/fold scope reduction is the main caveat on all of
+it.
+
+Full per-group table: `outputs/phase_demographic_cv_by_group.csv`. Per-clip OOF predictions (all methods,
+all folds): `outputs/phase_demographic_cv_predictions.csv`. Per-fold training times:
+`outputs/phase_demographic_cv_timings.csv`.
