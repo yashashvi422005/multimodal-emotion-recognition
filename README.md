@@ -624,10 +624,16 @@ Full writeup and tables: `RESULTS.md`, Phase 5 round 4. Summary: actor-level 5-f
 non-test actors, scope-reduced to **1 seed per fold** (10 face-model training runs instead of the full
 spec's 30) after a pre-run estimate put the full 3-seeds/fold version at 10-17 hours on this Mac — agreed
 with the user before launching; actual wall time was ~4.2 hours. Reports macro-F1 by sex, age band, and
-race (groups with fewer than 3 actors excluded — only `Race=Unknown`, n=1, triggers this). Headline: a
-consistent sex gap favoring female actors across every method; age and race patterns are directionally
-suggestive but the smallest groups (60+, n=4; Asian, n=6) need a multi-seed re-check before being treated
-as confirmed effects.
+race (groups with fewer than 3 actors excluded — only `Race=Unknown`, n=1, triggers this).
+
+**Round 5 adds actor-level bootstrap 95% CIs** (`scripts/20_demographic_bootstrap_ci.py`,
+`RESULTS.md` round 5) on the sex and age differences above — a difference is only called a "gap" if its
+CI excludes zero. Result: the sex difference does **not** reach significance for any method (round 4's
+"consistent sex gap" is retracted); the age difference (≤30 vs. 46-60) **is** a confirmed gap for the two
+`aug_all`-involving methods (face and fusion), not for the clean-trained ones; the audio branch is
+roughly uniform across age groups; and the age gap's *widening* from clean to `aug_all` training is a
+confirmed effect for fusion specifically (CI [+0.006, +0.075]), though not confirmed for the face branch
+alone.
 
 ## Final evaluation plan (pre-registered, not yet executed)
 

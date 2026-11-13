@@ -207,13 +207,77 @@ Asian actors (smallest included group, n=6) score highest on face-only and fusio
 averaging here. African American and Caucasian actors score similarly to each other on fusion, both
 somewhat below Asian.
 
-**Headline:** there is a real, consistent sex gap (female actors score higher on every method) that's
-unlikely to be single-seed noise given it holds the same direction across all 5 methods. The age and race
-patterns are directionally interesting (younger actors do best; the two largest race groups are similar
-to each other) but the smallest groups (60+, Asian) need a multi-seed re-check before treating their
-numbers as more than suggestive — this analysis's 1-seed/fold scope reduction is the main caveat on all of
-it.
+**Headline (corrected in round 5 below):** female actors score higher than male actors on every method
+in this single-seed run, and younger actors score higher than older ones — but see round 5: an
+actor-level bootstrap found neither difference's 95% CI excludes zero for the *sex* comparison at the
+group sizes available here, so "consistent sex gap" was an overclaim and is retracted below. The age
+comparison fares better for some methods. The smallest groups (60+, Asian) still need a multi-seed
+re-check before treating their numbers as more than suggestive — this analysis's 1-seed/fold scope
+reduction is the main caveat on all of it.
 
 Full per-group table: `outputs/phase_demographic_cv_by_group.csv`. Per-clip OOF predictions (all methods,
 all folds): `outputs/phase_demographic_cv_predictions.csv`. Per-fold training times:
 `outputs/phase_demographic_cv_timings.csv`.
+
+## Phase 5, round 5 (development): actor-level bootstrap CIs on the demographic differences
+
+**Method:** actor-level bootstrap (B=1000), stratified within each group being compared — each draw
+resamples group A's actors with replacement (same N as the real group) independently from group B's
+actors, pools clips per group, computes macro-F1, and takes the difference. This is the honest way to
+put a CI on round 4's group numbers, since the unit of resampling must be the actor (clips from the same
+actor aren't independent), not the clip. `scripts/20_demographic_bootstrap_ci.py`, training-free (reuses
+round 4's saved OOF predictions). Following the standard here: **a difference is only called a "gap"
+below if its 95% CI excludes zero; otherwise it's reported as an observed difference, not a gap.**
+
+### Sex: female − male (observed differences, none reach a 95% CI excluding zero)
+
+| method | female | male | diff | 95% CI | gap? |
+|---|---|---|---|---|---|
+| audio-only | 0.512 | 0.499 | +0.013 | [−0.031, +0.059] | no |
+| face (clean) | 0.556 | 0.519 | +0.037 | [−0.019, +0.097] | no |
+| face (aug_all) | 0.566 | 0.532 | +0.034 | [−0.023, +0.091] | no |
+| fusion (clean) | 0.662 | 0.636 | +0.025 | [−0.031, +0.080] | no |
+| fusion (aug_all) | 0.677 | 0.646 | +0.032 | [−0.024, +0.086] | no |
+
+**Retraction: round 4's "consistent sex gap" claim does not hold up.** The direction is the same
+(female higher) for all 5 methods, but every single 95% CI includes zero — at n=38/41 actors and a
+single training seed, this project cannot distinguish the observed female-male difference from sampling
+noise. It is reported here as an **observed difference**, not a confirmed gap.
+
+### Age: ≤30 − 46–60 (observed differences; two reach a 95% CI excluding zero)
+
+| method | ≤30 | 46-60 | diff | 95% CI | gap? |
+|---|---|---|---|---|---|
+| audio-only | 0.507 | 0.502 | +0.004 | [−0.057, +0.068] | no |
+| face (clean) | 0.569 | 0.492 | +0.077 | [−0.002, +0.154] | no (barely) |
+| face (aug_all) | 0.611 | 0.477 | **+0.134** | **[+0.068, +0.201]** | **yes** |
+| fusion (clean) | 0.677 | 0.621 | +0.055 | [−0.007, +0.132] | no (barely) |
+| fusion (aug_all) | 0.707 | 0.612 | **+0.095** | **[+0.022, +0.170]** | **yes** |
+
+**The audio branch is roughly uniform across age groups** (diff +0.004, CI straddling zero by a wide
+margin) — consistent with the research question's premise that voice doesn't carry the same demographic
+performance disparities the face branch does. The age difference is only a confirmed gap (CI excludes
+zero) for the two **aug_all**-involving methods; the clean-trained face and clean-fusion differences are
+in the same direction but their CIs just barely include zero (lower bound −0.002 and −0.007), so they
+are reported as observed differences, not confirmed gaps.
+
+### Does occlusion-augmented training widen the age gap? Paired bootstrap on the change, clean → aug_all
+
+| branch | gap (clean) | gap (aug_all) | change | 95% CI | widens? |
+|---|---|---|---|---|---|
+| face-only | +0.077 | +0.134 | +0.057 | [−0.020, +0.125] | no (not confirmed) |
+| fusion | +0.055 | +0.095 | **+0.039** | **[+0.006, +0.075]** | **yes** |
+
+Each bootstrap draw reused the *same* resampled actor sets for both the clean and `aug_all` metrics, so
+the clean-vs-`aug_all` comparison within each draw is properly paired. **For the fusion pipeline, the
+age gap's widening from occlusion-augmented training is a confirmed effect** (CI excludes zero) — the
+same widening for the face branch alone is in the same direction but not statistically confirmed at this
+sample size (CI includes zero, barely: lower bound −0.020). This is a genuine, reportable caution on the
+occlusion-augmentation ablation: the robustness gain documented in round 2 comes with some evidence of a
+wider age-based performance disparity after fusion, not just a face-only side effect.
+
+**Standing limitation, repeated from round 4: every number in this section is single-seed (1 seed/fold),
+not the usual 3-seed mean.** The bootstrap CIs account for actor-sampling uncertainty, not seed
+uncertainty — a 3-seed version of this analysis could shift these point estimates and CIs.
+
+Full tables: `outputs/phase_demographic_bootstrap_sex.csv`, `..._age.csv`, `..._age_change.csv`.
