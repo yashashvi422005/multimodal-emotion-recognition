@@ -20,9 +20,11 @@ applied.
   classification head), trained on TRAIN actors, early-stopped on VAL actors' macro-F1, 3 seeds
   (`notebooks/wavlm_finetune_kaggle.ipynb`, run on Kaggle — see that notebook and the project README for
   the exact procedure). **Training complete**: 3 checkpoints in `models/wavlm/` (gitignored, local
-  only), val-set probabilities in `outputs/wavlm_val_probs.csv`, re-scored locally and confirmed
-  identical to the Kaggle-reported numbers (`RESULTS.md` round 6). **The Kaggle run never touched test
-  actors** (enforced by an assertion inside the notebook, confirmed again locally by checking the
+  only). Inference uses `batch_size=1` (no padding at all), not Kaggle's original batched val-set
+  probabilities — round 7 (`RESULTS.md`) found the frozen CNN feature encoder is not
+  batch-composition-invariant, so `batch_size=1` is the only way to get a well-defined, reproducible
+  per-clip score; this is what `evaluate.py` and `outputs/wavlm_val_probs_batch1.csv` both use.
+  **The Kaggle run never touched test actors** (enforced by an assertion inside the notebook, confirmed again locally by checking the
   downloaded val probabilities' actor set against the official split). This plan's test-set evaluation
   loads those 3 already-trained checkpoints for inference only — no retraining happens as part of this
   plan, same as the face models.
@@ -131,9 +133,20 @@ WavLM — the Kaggle notebook itself never touches test actors (see
 `notebooks/wavlm_finetune_kaggle.ipynb`), so training it is not a test-set touch and does not require a
 separate pre-registration update once it's done; this document's plan already covers it.
 
-**As of round 6, every model this plan needs is locked and present**: tuned eGeMAPS (`C=0.3`), WavLM (3
-checkpoints + val probabilities, re-scored and verified against the Kaggle run), and the 3 face-model
-variants (clean-trained, `aug_all`, `aug_no_mask`, 3 seeds each). All 6 fusion methods have been
-exercised end-to-end on VAL for both audio branches (`RESULTS.md` rounds 2-3 for eGeMAPS, round 6 for
-WavLM). **No test-set code has been run.** `evaluate.py --final` has not yet been written; writing it is
-the only remaining step before this plan executes, and it will not start until explicitly requested.
+**As of round 7, every model this plan needs is locked and present**: tuned eGeMAPS (`C=0.3`), WavLM (3
+checkpoints, re-scored with `batch_size=1` after round 7 found the original Kaggle batching was not
+reproducible), and the 3 face-model variants (clean-trained, `aug_all`, `aug_no_mask`, 3 seeds each).
+All 6 fusion methods have been exercised end-to-end on VAL for both audio branches (`RESULTS.md`
+rounds 2-3 for eGeMAPS, round 6-7 for WavLM — round 7 supersedes round 6's WavLM numbers).
+
+**`evaluate.py` has been written** (repo root) and implements this plan's full pipeline — both audio
+branches, all 3 face variants, all 6 fusion methods, all 13 conditions, and the two pre-registered
+paired bootstrap comparisons — parameterized by `--split {val,test}`. It has been **dry-run on
+`--split val`** and reproduces the face-branch and eGeMAPS numbers in `RESULTS.md` exactly (bit-identical
+for face, to 5 decimal places for eGeMAPS); the WavLM branch now uses `batch_size=1` rather than
+reproducing Kaggle's batching, by design (round 7). `--split test` is refused unless `--final` is also
+passed, and additionally requires a pre-built test occlusion-detection cache that does not yet exist
+(this script does not build it itself — see the "Conditions" section above). **No test-set code has
+been run.** The remaining steps before this plan executes are: (1) build the test occlusion-detection
+cache, (2) run `python evaluate.py --split test --final`. Neither has been started, and neither will
+start until explicitly requested.

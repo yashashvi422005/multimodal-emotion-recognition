@@ -661,14 +661,17 @@ variants × 3 seeds, tuned eGeMAPS, WavLM × 3 seeds — all now locked and pres
 all 13 conditions, all fusion methods, macro-F1 as primary metric, and a paired actor-level bootstrap
 over the 12 test actors for two pre-registered comparisons (fixed-fusion vs. audio-only; `aug_no_mask`
 vs. clean-trained face under mask). Commits in advance to reporting whatever the test set shows.
-**No test-set code has been run.** `evaluate.py --final` is the only remaining step and has not been
+`evaluate.py` (repo root) has been written and dry-run on `--split val`, reproducing the face-branch and
+eGeMAPS numbers above exactly. **No test-set code has been run.** The remaining steps are building the
+test occlusion-detection cache and running `python evaluate.py --split test --final`; neither has
 started.
 
 ## Project structure
 
 ```
+evaluate.py       # the pre-registered final evaluation script (FINAL_EVAL_PLAN.md); --split val|test, --final gates test
 src/fer/          # package: filenames, probe, demographics, metadata, splits, envinfo,
-                  # audio_features, uncertainty, face_pipeline
+                  # audio_features, uncertainty, face_pipeline, wavlm_model
 configs/          # YAML configs (data.yaml, audio_baseline.yaml, ...)
 scripts/          # one script per pipeline stage
 splits/           # versioned, hashed actor split files (tracked in git)
@@ -707,24 +710,39 @@ since browser downloads were unreliable) and moved into `models/wavlm/` (gitigno
 verification step passing and every epoch's `train_loss`/`val_macro_f1`.
 
 `scripts/22_wavlm_rescore_and_tuned_egemaps.py` re-scores WavLM locally with the exact same metric code
-used for eGeMAPS (`sklearn.metrics.f1_score`/`accuracy_score`/`confusion_matrix`), confirms the val clip
-set is identical to eGeMAPS's (1,224 clips, 15 val actors, every seed, no test-actor leakage), and
-reproduces the Kaggle-reported macro-F1 exactly for all 3 seeds:
+used for eGeMAPS (`sklearn.metrics.f1_score`/`accuracy_score`/`confusion_matrix`), and confirms the val
+clip set is identical to eGeMAPS's (1,224 clips, 15 val actors, every seed, no test-actor leakage).
+
+**Round 7 correction — WavLM's evaluation is not batch-composition-invariant.** The frozen CNN feature
+encoder has no attention-masking mechanism (unlike the transformer layers above it), so when clips of
+different lengths share a zero-padded batch, `GroupNorm` statistics inside the encoder shift for the
+whole sequence — found to move some clips' predicted class outright depending on arbitrary batch
+composition (see `RESULTS.md` round 7 for the full account, including a reproduction showing the same
+clip/weights give different top-1 classes in two different, equally valid batch groupings). The original
+Kaggle-reported numbers (0.7027 ± 0.0076) depended on one arbitrary historical batch grouping and are
+**superseded**. Fix: `batch_size=1` (no padding at all) — `scripts/25_wavlm_rescore_batch1.py` re-scores
+all 3 seeds this way, run twice each to confirm bit-identical determinism first:
 
 | seed | macro-F1 | accuracy |
 |---|---|---|
-| 0 | 0.6940 | 0.7002 |
-| 1 | 0.7124 | 0.7116 |
-| 2 | 0.7016 | 0.7067 |
-| **mean ± std** | **0.7027 ± 0.0076** | **0.7062 ± 0.0047** |
+| 0 | 0.6809 | 0.6879 |
+| 1 | 0.7128 | 0.7124 |
+| 2 | 0.6850 | 0.6912 |
+| **mean ± std** | **0.6929 ± 0.0142** | **0.6972 ± 0.0109** |
 
-That's roughly **+0.21 macro-F1 over tuned eGeMAPS (0.4950)** on the identical val clips — WavLM is a
-substantially stronger audio branch. `scripts/23_phase5_fusion_wavlm.py` re-runs the full pre-registered
-fusion comparison (all 6 methods × all 3 face variants × all 13 conditions) with WavLM as the audio
-branch (each WavLM seed paired with the matching face-model seed); full results, including a case where
-fixed fusion now *loses* to audio-only (clean-trained face under `mask`, where WavLM is strong enough
-that averaging it with a face branch that's collapsed hurts more than it helps), are in `RESULTS.md`
-round 6.
+(Checked, not retrained: the model's masked-mean pooling itself correctly excluded padded frames in
+both training and evaluation — the same `forward` code path runs in both. The unmasked part is only the
+upstream CNN encoder, a known property of wav2vec2/WavLM architectures. One consequence: WavLM's 3
+Kaggle training runs were themselves exposed to this same batch-padding noise epoch to epoch, a mild
+additional source of training stochasticity — noted as a limitation, not re-run.)
+
+That's still roughly **+0.20 macro-F1 over tuned eGeMAPS (0.4950)** on the identical val clips — WavLM
+remains a substantially stronger audio branch, just not quite as strong as first measured.
+`scripts/23_phase5_fusion_wavlm.py` re-runs the full pre-registered fusion comparison (all 6 methods ×
+all 3 face variants × all 13 conditions) with the corrected WavLM as the audio branch (each WavLM seed
+paired with the matching face-model seed); fixed 50/50 fusion still *loses* to audio-only for the
+clean-trained face under `mask` (at severities 0.3 and 0.6, now 11/13 conditions won rather than
+round 6's 10/13) — full results are in `RESULTS.md` round 7, which supersedes round 6's WavLM numbers.
 
 ## Later phases (not started)
 

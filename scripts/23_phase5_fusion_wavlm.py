@@ -41,7 +41,7 @@ SEEDS = [0, 1, 2]
 VARIANTS = ["clean", "aug_all", "aug_no_mask"]
 OUT_DIR = REPO_ROOT / "outputs"
 FACE_PROBS_PATH = OUT_DIR / "phase4_face_probs.parquet"
-WAVLM_PROBS_PATH = OUT_DIR / "wavlm_val_probs.csv"
+WAVLM_PROBS_PATH = OUT_DIR / "wavlm_val_probs_batch1.csv"  # round 7: batch_size=1, reproducible -- supersedes the original Kaggle batch_size=16 CSV
 EPS = 1e-9
 
 

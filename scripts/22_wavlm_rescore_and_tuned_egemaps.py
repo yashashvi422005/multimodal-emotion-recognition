@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Phase 5, round 6: re-score WavLM locally using the exact metric code
+"""Phase 5, round 6/7: re-score WavLM locally using the exact metric code
 eGeMAPS was scored with (sklearn f1_score/accuracy_score/confusion_matrix
 directly, no abstention since WavLM never abstains), confirm the val clip
 set matches eGeMAPS exactly, and fix the eGeMAPS/WavLM tuning asymmetry by
@@ -8,9 +8,16 @@ hyperparameters were already chosen with early stopping on val macro-F1
 inside the Kaggle notebook; eGeMAPS had never had anything tuned on val
 before this).
 
-Inputs (already downloaded from the Kaggle run, see README.md):
-    outputs/wavlm_val_probs.csv    -- per-clip, per-seed val probabilities
-    outputs/wavlm_seed_summary.csv -- Kaggle's own self-reported val macro-F1
+Round 7 update: WavLM's input is now outputs/wavlm_val_probs_batch1.csv
+(scripts/25_wavlm_rescore_batch1.py), NOT the original Kaggle-produced
+outputs/wavlm_val_probs.csv -- the latter's numbers turned out to depend
+on an arbitrary historical batch grouping (see RESULTS.md round 7), so
+the "Kaggle-reported" comparison below is kept only as a labeled,
+explained discrepancy, not a correctness check.
+
+Inputs:
+    outputs/wavlm_val_probs_batch1.csv -- per-clip, per-seed val probabilities, batch_size=1
+    outputs/wavlm_seed_summary.csv     -- Kaggle's own self-reported val macro-F1 (batch_size=16, superseded)
 
 Usage:
     python scripts/22_wavlm_rescore_and_tuned_egemaps.py
@@ -63,7 +70,7 @@ def main() -> None:
     # ---------------------------------------------------------------
     # Item 1: re-score WavLM
     # ---------------------------------------------------------------
-    wavlm_df = pd.read_csv(OUT_DIR / "wavlm_val_probs.csv")
+    wavlm_df = pd.read_csv(OUT_DIR / "wavlm_val_probs_batch1.csv")
     wavlm_actors = {c.split("_")[0] for c in wavlm_df["clip_id"]}
     assert not wavlm_actors & test_actors, f"WavLM val probs touch test actors: {wavlm_actors & test_actors}"
     assert wavlm_actors == val_actors, f"WavLM val actors {wavlm_actors} != official val actors {val_actors}"
@@ -98,9 +105,8 @@ def main() -> None:
 
         kaggle_mf1 = kaggle_summary.loc[seed, "val_macro_f1"]
         diff = metrics["macro_f1"] - kaggle_mf1
-        flag = "" if abs(diff) < 1e-4 else "  <-- DIFFERS from Kaggle-reported value"
-        print(f"\nseed={seed}: local macro_f1={metrics['macro_f1']:.4f}  accuracy={metrics['accuracy']:.4f}")
-        print(f"  Kaggle-reported val_macro_f1={kaggle_mf1:.4f}  (diff={diff:+.4f}){flag}")
+        print(f"\nseed={seed}: local macro_f1={metrics['macro_f1']:.4f}  accuracy={metrics['accuracy']:.4f}  (batch_size=1, reproducible)")
+        print(f"  Kaggle-reported val_macro_f1={kaggle_mf1:.4f}  (diff={diff:+.4f}) -- batch_size=16, batch-order-dependent, SUPERSEDED (see RESULTS.md round 7)")
         print(f"  actor-level bootstrap 95% CI: [{ci_lo:.4f}, {ci_hi:.4f}]  (bootstrap mean={boot_scores.mean():.4f}, std={boot_scores.std():.4f})")
         print("  per-class F1:")
         for cls in class_order:

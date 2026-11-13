@@ -284,6 +284,12 @@ Full tables: `outputs/phase_demographic_bootstrap_sex.csv`, `..._age.csv`, `..._
 
 ## Phase 5, round 6 (development): WavLM audio branch, tuned eGeMAPS, and WavLM fusion
 
+**⚠️ Superseded: see round 7 below.** The WavLM numbers in this section (0.7027 ± 0.0076 and every
+WavLM-involving fusion number) turned out to depend on an arbitrary historical batch grouping from the
+Kaggle run, not a reproducible property of the model — round 7 explains why and replaces every number
+here that involves WavLM. eGeMAPS's numbers in this section (tuned `C=0.3` = 0.4950) are unaffected and
+still current. Kept below for the historical record, not as current numbers.
+
 Three pieces, all VAL only, all training-free locally (WavLM was fine-tuned on Kaggle; see
 `README.md`'s WavLM section for that run). `scripts/22_wavlm_rescore_and_tuned_egemaps.py`,
 `scripts/23_phase5_fusion_wavlm.py`.
@@ -360,3 +366,88 @@ fused score down much further than it would with a weaker audio branch. This is 
 yet in this project that **occlusion-augmented training (`aug_all`/`aug_no_mask`) is not just a nice-to-
 have — it's what keeps fixed averaging from actively hurting once the audio branch is strong.** Full
 per-seed and aggregate tables: `outputs/phase5_fusion_wavlm_by_seed.csv`, `..._table.csv`.
+
+## Phase 5, round 7 (development): WavLM is not batch-composition-invariant — re-scored, every WavLM number superseded
+
+While dry-running `evaluate.py` (the script `FINAL_EVAL_PLAN.md` specifies for the eventual test-set
+run) on VAL, WavLM's audio-only macro-F1 came back as 0.6867, not round 6's 0.6940. Tracing it down
+found a real, previously-unknown property of this trained model, not a coding bug in the usual sense:
+
+**WavLM's frozen CNN feature encoder has no attention-masking mechanism**, unlike the transformer
+layers above it (which do correctly mask padded positions, including in this project's own
+masked-mean pooling — see the "training pooling" note below). When clips of different lengths share a
+zero-padded batch, the padding changes the conv encoder's `GroupNorm` statistics for the *whole*
+sequence, not just near the boundary. Reconstructing the exact historical batch one val clip
+(`1035_IEO_SAD_MD`) happened to land in (from `wavlm_val_probs.csv`'s own row order) reproduced
+round 6's stored prediction exactly (fear 0.40 / sad 0.32); a different, equally valid batch grouping
+gave a completely different top class (happy, 0.75) for the *same clip, same weights*. Across all 1224
+val clips this moved 362 clips' probabilities by >0.01 and 23 clips' argmax prediction outright, for a
+net macro-F1 shift of about −0.01 to −0.02 depending on seed.
+
+**Fix: `batch_size=1` (no padding at all).** A clip's score then depends on nothing but its own audio
+and the checkpoint weights — the only way to get a well-defined, reproducible per-clip result. This is
+what `evaluate.py` now does, and `scripts/25_wavlm_rescore_batch1.py` applies it to re-score all 3
+seeds, run twice each to confirm determinism (bit-identical, max diff 0.0, on both MPS and CPU) before
+trusting the result:
+
+| seed | macro-F1 | accuracy | val-actor bootstrap 95% CI |
+|---|---|---|---|
+| 0 | 0.6809 | 0.6879 | [0.633, 0.725] |
+| 1 | 0.7128 | 0.7124 | [0.662, 0.766] |
+| 2 | 0.6850 | 0.6912 | [0.619, 0.743] |
+| **mean ± std** | **0.6929 ± 0.0142** | **0.6972 ± 0.0109** | — |
+
+**Every number in round 6 that involves WavLM is superseded by this table** (and by the re-run fusion
+numbers below) — round 6 is kept only as a historical record of the batch-order-dependent run, not as
+current numbers. Per-class F1 (mean ± std): anger 0.853±0.031, disgust 0.674±0.012, fear 0.567±0.005,
+happy 0.750±0.034, neutral 0.758±0.041, sad 0.557±0.020.
+
+### Did WavLM's training-time pooling ignore padded frames? No — only the upstream encoder is unmasked
+
+Checked, not retrained: `WavLMClassifier.forward` (`notebooks/wavlm_finetune_kaggle.ipynb`) computes
+`_get_feature_vector_attention_mask` and does a masked-mean pool over the transformer's last hidden
+state, and this exact `forward` method is called identically inside both the training loop and
+`evaluate()` — there is no training/eval branch. **The pooling step correctly excluded padded frames in
+both training and evaluation.** The batch-composition sensitivity above comes entirely from the
+upstream CNN feature encoder (before the transformer, before pooling), which has no masking mechanism
+at all — a known architectural property of wav2vec2/WavLM-style models, not specific to this project's
+code. One real consequence: because training batches were padded and shuffled every epoch, training
+itself was exposed to the same batch-composition noise from epoch to epoch — a mild additional source
+of training stochasticity on top of the usual data-order/weight-init randomness. This does not
+invalidate the trained checkpoints; it only means *evaluating* them needs `batch_size=1` to have a
+well-defined answer. **Standing limitation, added here**: WavLM's 3 training runs (on Kaggle) were
+themselves subject to this epoch-to-epoch batch-padding noise; a future round could re-run training
+with length-bucketed batching (grouping similar-length clips together) to reduce it, but that is a
+retraining decision, not made here.
+
+### Fusion re-run with the corrected WavLM (`scripts/23_phase5_fusion_wavlm.py`, same methodology)
+
+**Pooled over all 12 occlusion conditions (excludes clean), mean macro-F1:**
+
+| face variant | audio-only (WavLM) | face-only | fixed 50/50 | conf-maxprob | conf-negentropy | learned gate |
+|---|---|---|---|---|---|---|
+| clean-trained | 0.693 | 0.273 | **0.698** | 0.694 | 0.694 | 0.674 |
+| aug_all | 0.693 | 0.451 | **0.737** | 0.733 | 0.731 | 0.706 |
+| aug_no_mask | 0.693 | 0.427 | **0.731** | 0.727 | 0.725 | 0.694 |
+
+Fixed 50/50 is still the best method on average, same pattern as every prior round.
+
+**Does fixed fusion beat audio-only in every occlusion condition?** Per-condition (13 conditions
+including clean): **aug_all 13/13**, **aug_no_mask 13/13**, **clean-trained 11/13** — loses to
+audio-only at `mask` 0.3 (−0.012) and `mask` 0.6 (**−0.049**, still the worst case); this is one fewer
+exception than round 6 found (`patch` 0.9 is now a narrow win, +0.0004, rather than a loss) — the
+qualitative story (occlusion-augmented training is what keeps averaging from hurting once audio is
+strong) is unchanged.
+
+**Fused val macro-F1 on CLEAN faces with the corrected WavLM, next to WavLM alone:**
+
+| | macro-F1 |
+|---|---|
+| WavLM alone (audio-only, clean) | 0.6929 ± 0.0142 |
+| + clean-trained face, fixed 50/50 | 0.7599 ± 0.0152 |
+| + aug_all, fixed 50/50 | 0.7622 ± 0.0150 |
+| + aug_no_mask, fixed 50/50 | 0.7623 ± 0.0197 |
+
+Full per-seed and aggregate tables (overwritten in place): `outputs/phase5_fusion_wavlm_by_seed.csv`,
+`..._table.csv`. Underlying re-scored WavLM data: `outputs/wavlm_val_probs_batch1.csv`,
+`outputs/wavlm_batch1_seed_summary.csv`.
