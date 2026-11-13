@@ -28,6 +28,9 @@ models/
 *.ckpt
 *.safetensors
 
+# Generated Kaggle upload payload (regenerable via scripts/21_prepare_kaggle_upload.py)
+kaggle_upload/
+
 # Editors
 .vscode/
 .idea/
