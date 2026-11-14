@@ -63,6 +63,29 @@ def negentropy_confidence(probs: np.ndarray, n_classes: int) -> np.ndarray:
     return np.log(n_classes) - h
 
 
+def fit_gate_on_all(face_conf: np.ndarray, audio_conf: np.ndarray, face_correct: np.ndarray) -> tuple[LogisticRegression | None, float]:
+    """Fit ONE learned gate on every row passed in (no fold split) --
+    for the frozen-on-val, applied-to-test workflow (FINAL_EVAL_PLAN.md
+    amendment), where the gate must never see the actors it's later
+    scored on, but that's guaranteed by fitting only on val actors and
+    applying the frozen result to test, not by cross-fitting within one
+    set. Returns (fitted LogisticRegression or None, fallback mean) --
+    None/fallback mirrors fit_gate_cross_fit's degenerate-label handling."""
+    X = np.stack([face_conf, audio_conf], axis=1)
+    y = face_correct.astype(int)
+    if len(np.unique(y)) < 2:
+        return None, float(y.mean())
+    return LogisticRegression().fit(X, y), float("nan")
+
+
+def apply_gate(gate: LogisticRegression | None, fallback_mean: float, face_conf: np.ndarray, audio_conf: np.ndarray) -> np.ndarray:
+    if gate is None:
+        return np.full(len(face_conf), fallback_mean)
+    X = np.stack([face_conf, audio_conf], axis=1)
+    pos_col = list(gate.classes_).index(1)
+    return gate.predict_proba(X)[:, pos_col]
+
+
 def fit_gate_cross_fit(face_conf: np.ndarray, audio_conf: np.ndarray, face_correct: np.ndarray, actor_of_row: pd.Series, fold_a: set, fold_b: set) -> np.ndarray:
     """Pooled (clean + every occlusion condition) logistic-regression gate:
     P(face branch is correct | [face_conf, audio_conf]), used as the face

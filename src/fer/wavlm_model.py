@@ -9,6 +9,18 @@ once the config is cached.
 
 from __future__ import annotations
 
+import os
+
+# The config/feature-extractor files are already cached locally (confirmed:
+# ~/.cache/huggingface/hub/models--microsoft--wavlm-base-plus/snapshots/.../
+# {config,preprocessor_config}.json). Forcing offline mode means a flaky or
+# dead network can no longer turn a config lookup into a multi-hour hang on
+# Hub retries before falling back to cache -- found the hard way during a
+# multi-seed val re-run that took 10+ hours (mostly idle, waiting on the
+# Hub) instead of the ~3 expected. Does not affect the checkpoint load,
+# which was always local-only.
+os.environ.setdefault("HF_HUB_OFFLINE", "1")
+
 import numpy as np
 import torch
 import torch.nn as nn

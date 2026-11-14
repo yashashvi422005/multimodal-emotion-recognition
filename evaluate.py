@@ -1,14 +1,20 @@
 #!/usr/bin/env python
-"""The final evaluation script specified by FINAL_EVAL_PLAN.md: tuned
-eGeMAPS (C=0.3) and WavLM audio branches, all 3 face-model variants
-(clean-trained, aug_all, aug_no_mask), all 6 fusion methods (audio_only,
-face_only, fixed_5050, conf_maxprob, conf_negentropy, learned_gate), all
-13 conditions, macro-F1 as primary metric, and the two pre-registered
-paired actor-level bootstrap comparisons.
+"""The final evaluation script specified by FINAL_EVAL_PLAN.md (as
+amended 2026-11-13): tuned eGeMAPS (C=0.3) and WavLM audio branches, all
+3 face-model variants (clean-trained, aug_all, aug_no_mask), all 6
+fusion methods (audio_only, face_only, fixed_5050, conf_maxprob,
+conf_negentropy, learned_gate), all 13 conditions, macro-F1 as primary
+metric, and the pre-registered paired actor-level bootstrap comparisons
+P1/P2/P3 (plus the original eGeMAPS-based comparisons, now secondary).
 
-Defaults to --split val -- a dry run against the actors this project has
-been developed on, which must reproduce the val numbers already in
-RESULTS.md before this script is ever trusted with the frozen test set.
+Calibration (temperature) and the learned gate are fit ONCE on ALL VAL
+actors -- exactly the methodology used throughout development, just
+without the 2-fold cross-fit split -- and FROZEN. The frozen parameters
+are applied directly to whichever split is being scored; test labels are
+only ever used for scoring, never for fitting anything. When --split val
+(the dry run), the fitting set and the scoring set are the same actors,
+so this script fits and scores using the same frozen parameters as a
+code-path check before trusting the --split test run.
 
 --split test is refused unless --final is also passed (defense in
 depth), and additionally requires a pre-built test occlusion-detection
@@ -38,7 +44,8 @@ from sklearn.preprocessing import StandardScaler
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 
 from fer.audio_features import extract_egemaps_for_clips, feature_columns, load_features, save_features
-from fer.fusion import cross_fit_calibrate_clean_only, fit_gate_cross_fit, maxprob_confidence, negentropy_confidence, probs_matrix, two_fold_actor_split
+from fer.calibration import apply_temperature, fit_temperature
+from fer.fusion import apply_gate, fit_gate_on_all, maxprob_confidence, negentropy_confidence, probs_matrix, y_true_idx
 from fer.metrics import score_with_abstention
 from fer.occlusion_eval import evaluate_clean_probs, evaluate_occlusion_probs, load_resnet18_checkpoint
 from fer.splits import load_split
@@ -251,77 +258,119 @@ def main() -> None:
                 f"detection cache itself (a separate, deliberate step -- see FINAL_EVAL_PLAN.md). Build it "
                 f"first, then re-run."
             )
-        det_cache_path = TEST_DETECTION_CACHE
+        eval_det_cache_path = TEST_DETECTION_CACHE
     else:
-        det_cache_path = VAL_DETECTION_CACHE
+        eval_det_cache_path = VAL_DETECTION_CACHE
 
     metadata_all = pd.read_csv(REPO_ROOT / DATA_CFG["paths"]["outputs_dir"] / "metadata.csv", dtype={"actor_id": str})
-    eval_metadata = metadata_all[metadata_all["actor_id"].isin(eval_actors)].copy()
+    val_metadata = metadata_all[metadata_all["actor_id"].isin(val_actors)].copy()
+    eval_metadata = val_metadata if args.split == "val" else metadata_all[metadata_all["actor_id"].isin(eval_actors)].copy()
     assert set(eval_metadata["actor_id"]) == eval_actors, "eval metadata does not cover every eval actor"
     assert not (set(eval_metadata["actor_id"]) & (train_actors | (val_actors if args.split == "test" else test_actors)))
-    print(f"eval metadata: {len(eval_metadata)} clips, {eval_metadata['actor_id'].nunique()} actors")
+    print(f"calibration/gate fitting set (frozen, per FINAL_EVAL_PLAN.md amendment): VAL, {len(val_metadata)} clips, {val_metadata['actor_id'].nunique()} actors")
+    print(f"scoring set: {args.split.upper()}, {len(eval_metadata)} clips, {eval_metadata['actor_id'].nunique()} actors")
 
     device = device_for_torch()
     print(f"device: {device}")
 
-    detection_df = pd.read_parquet(det_cache_path)
-    det_lookup = detection_df.set_index(["clip_id", "frame_idx", "occlusion_type", "severity"])["detected"]
+    val_detection_df = pd.read_parquet(VAL_DETECTION_CACHE)
+    val_det_lookup = val_detection_df.set_index(["clip_id", "frame_idx", "occlusion_type", "severity"])["detected"]
+    if args.split == "val":
+        eval_det_lookup = val_det_lookup
+    else:
+        eval_detection_df = pd.read_parquet(eval_det_cache_path)
+        eval_det_lookup = eval_detection_df.set_index(["clip_id", "frame_idx", "occlusion_type", "severity"])["detected"]
 
-    fold_a, fold_b = two_fold_actor_split(sorted(eval_actors))
-    print(f"2-fold actor split for calibration/gate cross-fit: fold A={len(fold_a)}, fold B={len(fold_b)}")
-
-    print("\nfetching eGeMAPS (tuned, C={}) audio probs...".format(EGEMAPS_TUNED_C))
-    egemaps_df = fetch_egemaps_probs(eval_metadata, train_actors, test_actors, args.split)
-    clip_actor = dict(zip(egemaps_df["clip_id"], egemaps_df["actor_id"]))
+    print("\nfetching eGeMAPS (tuned, C={}) audio probs for VAL (calibration fitting)...".format(EGEMAPS_TUNED_C))
+    egemaps_df_val = fetch_egemaps_probs(val_metadata, train_actors, test_actors, "val")
+    if args.split == "val":
+        egemaps_df_eval = egemaps_df_val
+    else:
+        print("fetching eGeMAPS (tuned) audio probs for TEST scoring...")
+        egemaps_df_eval = fetch_egemaps_probs(eval_metadata, train_actors, test_actors, "test")
 
     all_rows = []
     per_clip_rows = []
 
     for seed in seeds:
-        print(f"\nfetching WavLM (seed={seed}) audio probs...")
-        wavlm_df = fetch_wavlm_probs(eval_metadata, seed, device)
-        assert set(wavlm_df["clip_id"]) == set(eval_metadata["clip_id"])
+        print(f"\nfetching WavLM (seed={seed}) audio probs for VAL (calibration fitting)...")
+        wavlm_df_val = fetch_wavlm_probs(val_metadata, seed, device)
+        if args.split == "val":
+            wavlm_df_eval = wavlm_df_val
+        else:
+            print(f"fetching WavLM (seed={seed}) audio probs for TEST scoring...")
+            wavlm_df_eval = fetch_wavlm_probs(eval_metadata, seed, device)
+        assert set(wavlm_df_eval["clip_id"]) == set(eval_metadata["clip_id"])
 
-        for audio_name, audio_df in [("egemaps_tuned", egemaps_df), ("wavlm", wavlm_df)]:
-            audio_calibrated, audio_T = cross_fit_calibrate_clean_only(audio_df, np.ones(len(audio_df), dtype=bool), clip_actor, fold_a, fold_b, CLASS_ORDER)
-            audio_raw = probs_matrix(audio_df, CLASS_ORDER)
-            audio_lookup_raw = dict(zip(audio_df["clip_id"], audio_raw))
-            audio_lookup_cal = dict(zip(audio_df["clip_id"], audio_calibrated))
+        for audio_name, audio_df_val, audio_df_eval in [("egemaps_tuned", egemaps_df_val, egemaps_df_eval), ("wavlm", wavlm_df_val, wavlm_df_eval)]:
+            # Calibration: fit ONCE on ALL val rows (audio has no occlusion condition, every
+            # row is "clean"), freeze, apply to the scoring set. Test labels are never used here.
+            P_val, yt_val = probs_matrix(audio_df_val, CLASS_ORDER), y_true_idx(audio_df_val, CLASS_ORDER)
+            audio_T = fit_temperature(P_val, yt_val)
+            print(f"  audio={audio_name} seed={seed}: temperature (fit on ALL {len(val_metadata['actor_id'].unique())} val actors, frozen) = {audio_T:.4f}")
+
+            audio_calibrated_eval = apply_temperature(probs_matrix(audio_df_eval, CLASS_ORDER), audio_T)
+            audio_raw_eval = probs_matrix(audio_df_eval, CLASS_ORDER)
+            audio_lookup_raw = dict(zip(audio_df_eval["clip_id"], audio_raw_eval))
+            audio_lookup_cal = dict(zip(audio_df_eval["clip_id"], audio_calibrated_eval))
             audio_lookup_conf_max = {cid: maxprob_confidence(v[None, :])[0] for cid, v in audio_lookup_cal.items()}
             audio_lookup_conf_ent = {cid: negentropy_confidence(v[None, :], N_CLASSES)[0] for cid, v in audio_lookup_cal.items()}
 
+            audio_calibrated_val = apply_temperature(P_val, audio_T)
+            audio_conf_max_val_lookup = {cid: maxprob_confidence(v[None, :])[0] for cid, v in zip(audio_df_val["clip_id"], audio_calibrated_val)}
+
             for variant in FACE_VARIANT_CKPT:
-                print(f"  seed={seed} audio={audio_name} face={variant}: fetching face probs + fusing...")
-                face_all = fetch_face_probs(variant, seed, eval_metadata, det_lookup, device)
-                clean_mask_all = (face_all["occlusion_type"] == "clean").to_numpy()
-                face_calibrated_all, face_T = cross_fit_calibrate_clean_only(face_all, clean_mask_all, clip_actor, fold_a, fold_b, CLASS_ORDER)
+                print(f"  seed={seed} audio={audio_name} face={variant}: fetching face probs for VAL (calibration/gate fitting)...")
+                face_all_val = fetch_face_probs(variant, seed, val_metadata, val_det_lookup, device)
+                if args.split == "val":
+                    face_all_eval = face_all_val
+                else:
+                    print(f"  seed={seed} audio={audio_name} face={variant}: fetching face probs for TEST scoring...")
+                    face_all_eval = fetch_face_probs(variant, seed, eval_metadata, eval_det_lookup, device)
 
-                actor_of_row = face_all["clip_id"].map(clip_actor)
-                face_raw_all = probs_matrix(face_all, CLASS_ORDER)
-                face_pred_idx_all = np.argmax(face_raw_all, axis=1)
-                y_true_all = face_all["y_true"].to_numpy()
-                abstained_all = face_all["abstained"].to_numpy()
-                face_correct_all = np.array([CLASS_ORDER[p] == yt for p, yt in zip(face_pred_idx_all, y_true_all)]) & (~abstained_all)
+                clean_mask_val = (face_all_val["occlusion_type"] == "clean").to_numpy()
+                P_face_val_clean = probs_matrix(face_all_val, CLASS_ORDER)[clean_mask_val]
+                yt_face_val_clean = y_true_idx(face_all_val, CLASS_ORDER)[clean_mask_val]
+                face_T = fit_temperature(P_face_val_clean, yt_face_val_clean)
+                print(f"    face temperature (fit on ALL val clean rows, frozen) = {face_T:.4f}")
 
-                face_conf_max_all = maxprob_confidence(face_calibrated_all)
-                face_conf_ent_all = negentropy_confidence(face_calibrated_all, N_CLASSES)
-                audio_conf_max_all = np.array([audio_lookup_conf_max[c] for c in face_all["clip_id"]])
-                audio_conf_ent_all = np.array([audio_lookup_conf_ent[c] for c in face_all["clip_id"]])
+                face_calibrated_eval = apply_temperature(probs_matrix(face_all_eval, CLASS_ORDER), face_T)
+                face_calibrated_val_all = apply_temperature(probs_matrix(face_all_val, CLASS_ORDER), face_T)
 
-                w_gate_all = fit_gate_cross_fit(face_conf_max_all, audio_conf_max_all, face_correct_all, actor_of_row, fold_a, fold_b)
+                # Gate: fit ONCE on ALL val rows (pooled clean + every occlusion condition), freeze.
+                face_raw_val_all = probs_matrix(face_all_val, CLASS_ORDER)
+                face_pred_idx_val_all = np.argmax(face_raw_val_all, axis=1)
+                y_true_val_all = face_all_val["y_true"].to_numpy()
+                abstained_val_all = face_all_val["abstained"].to_numpy()
+                face_correct_val_all = np.array([CLASS_ORDER[p] == yt for p, yt in zip(face_pred_idx_val_all, y_true_val_all)]) & (~abstained_val_all)
+                face_conf_max_val_all = maxprob_confidence(face_calibrated_val_all)
+                audio_conf_max_val_all = np.array([audio_conf_max_val_lookup[c] for c in face_all_val["clip_id"]])
+                gate_model, gate_fallback = fit_gate_on_all(face_conf_max_val_all, audio_conf_max_val_all, face_correct_val_all)
+
+                face_raw_eval = probs_matrix(face_all_eval, CLASS_ORDER)
+                face_pred_idx_eval = np.argmax(face_raw_eval, axis=1)
+                clean_mask_eval = (face_all_eval["occlusion_type"] == "clean").to_numpy()
+                abstained_eval = face_all_eval["abstained"].to_numpy()
+
+                face_conf_max_eval = maxprob_confidence(face_calibrated_eval)
+                face_conf_ent_eval = negentropy_confidence(face_calibrated_eval, N_CLASSES)
+                audio_conf_max_eval = np.array([audio_lookup_conf_max[c] for c in face_all_eval["clip_id"]])
+                audio_conf_ent_eval = np.array([audio_lookup_conf_ent[c] for c in face_all_eval["clip_id"]])
+
+                w_gate_eval = apply_gate(gate_model, gate_fallback, face_conf_max_eval, audio_conf_max_eval)
 
                 for occ_type, severity in ALL_CONDITIONS:
                     if occ_type == "clean":
-                        cond_mask = clean_mask_all
+                        cond_mask = clean_mask_eval
                     else:
-                        cond_mask = ((face_all["occlusion_type"] == occ_type) & (face_all["severity"] == severity)).to_numpy()
+                        cond_mask = ((face_all_eval["occlusion_type"] == occ_type) & (face_all_eval["severity"] == severity)).to_numpy()
                     if cond_mask.sum() == 0:
                         continue
 
-                    cond_df = face_all[cond_mask]
+                    cond_df = face_all_eval[cond_mask]
                     y_true = cond_df["y_true"].tolist()
-                    abstained = cond_df["abstained"].tolist()
-                    face_pred = [CLASS_ORDER[i] for i in face_pred_idx_all[cond_mask]]
+                    abstained = abstained_eval[cond_mask].tolist()
+                    face_pred = [CLASS_ORDER[i] for i in face_pred_idx_eval[cond_mask]]
                     cond_clip_ids = cond_df["clip_id"].tolist()
 
                     audio_cal_cond = np.stack([audio_lookup_cal[c] for c in cond_clip_ids])
@@ -337,7 +386,7 @@ def main() -> None:
                     for cid, yt, yp in zip(cond_clip_ids, y_true, face_pred):
                         per_clip_rows.append({"audio_branch": audio_name, "model_variant": variant, "seed": seed, "occlusion_type": occ_type, "severity": severity, "method": "face_only", "clip_id": cid, "y_true": yt, "y_pred": yp})
 
-                    face_cal_cond = face_calibrated_all[cond_mask]
+                    face_cal_cond = face_calibrated_eval[cond_mask]
 
                     w_fixed = np.full(cond_mask.sum(), 0.5)
                     mf1, acc, pred = fuse_and_score(audio_cal_cond, face_cal_cond, w_fixed, y_true, CLASS_ORDER)
@@ -345,17 +394,19 @@ def main() -> None:
                     for cid, yt, yp in zip(cond_clip_ids, y_true, pred):
                         per_clip_rows.append({"audio_branch": audio_name, "model_variant": variant, "seed": seed, "occlusion_type": occ_type, "severity": severity, "method": "fixed_5050", "clip_id": cid, "y_true": yt, "y_pred": yp})
 
-                    fc_max, ac_max = face_conf_max_all[cond_mask], audio_conf_max_all[cond_mask]
+                    fc_max, ac_max = face_conf_max_eval[cond_mask], audio_conf_max_eval[cond_mask]
                     w_max = fc_max / (fc_max + ac_max + EPS)
                     mf1, acc, pred = fuse_and_score(audio_cal_cond, face_cal_cond, w_max, y_true, CLASS_ORDER)
                     all_rows.append({"audio_branch": audio_name, "model_variant": variant, "seed": seed, "occlusion_type": occ_type, "severity": severity, "method": "conf_maxprob", "macro_f1": mf1, "accuracy": acc, "mean_face_weight": float(w_max.mean())})
+                    for cid, yt, yp in zip(cond_clip_ids, y_true, pred):
+                        per_clip_rows.append({"audio_branch": audio_name, "model_variant": variant, "seed": seed, "occlusion_type": occ_type, "severity": severity, "method": "conf_maxprob", "clip_id": cid, "y_true": yt, "y_pred": yp})
 
-                    fc_ent, ac_ent = face_conf_ent_all[cond_mask], audio_conf_ent_all[cond_mask]
+                    fc_ent, ac_ent = face_conf_ent_eval[cond_mask], audio_conf_ent_eval[cond_mask]
                     w_ent = fc_ent / (fc_ent + ac_ent + EPS)
                     mf1, acc, pred = fuse_and_score(audio_cal_cond, face_cal_cond, w_ent, y_true, CLASS_ORDER)
                     all_rows.append({"audio_branch": audio_name, "model_variant": variant, "seed": seed, "occlusion_type": occ_type, "severity": severity, "method": "conf_negentropy", "macro_f1": mf1, "accuracy": acc, "mean_face_weight": float(w_ent.mean())})
 
-                    w_gate = w_gate_all[cond_mask]
+                    w_gate = w_gate_eval[cond_mask]
                     mf1, acc, pred = fuse_and_score(audio_cal_cond, face_cal_cond, w_gate, y_true, CLASS_ORDER)
                     all_rows.append({"audio_branch": audio_name, "model_variant": variant, "seed": seed, "occlusion_type": occ_type, "severity": severity, "method": "learned_gate", "macro_f1": mf1, "accuracy": acc, "mean_face_weight": float(w_gate.mean())})
 
@@ -377,59 +428,104 @@ def main() -> None:
     print("\n--- pre-registered paired bootstrap comparisons ---")
     if args.split == "val":
         print("(DRY RUN on VAL -- these numbers are a code-path check, NOT the pre-registered test-set result.)")
-    run_bootstrap_comparisons(per_clip_df, eval_actors, egemaps_df)
+    run_bootstrap_comparisons(per_clip_df, eval_actors, eval_metadata)
 
 
-def run_bootstrap_comparisons(per_clip_df: pd.DataFrame, eval_actors: set, egemaps_df: pd.DataFrame) -> None:
+def run_bootstrap_comparisons(per_clip_df: pd.DataFrame, eval_actors: set, eval_metadata: pd.DataFrame) -> None:
     from sklearn.metrics import f1_score
-    clip_to_actor = dict(zip(egemaps_df["clip_id"], egemaps_df["actor_id"]))
+    clip_to_actor = dict(zip(eval_metadata["clip_id"], eval_metadata["actor_id"]))
     actor_list = sorted(eval_actors)
 
-    def paired_bootstrap(sub_a: pd.DataFrame, sub_b: pd.DataFrame, label: str, n_bootstrap: int = 2000, seed: int = 0) -> None:
-        y_true_a, y_pred_a = sub_a["y_true"].to_numpy(), sub_a["y_pred"].to_numpy()
-        y_true_b, y_pred_b = sub_b["y_true"].to_numpy(), sub_b["y_pred"].to_numpy()
-        actor_a = sub_a["clip_id"].map(clip_to_actor).to_numpy()
-        actor_b = sub_b["clip_id"].map(clip_to_actor).to_numpy()
-        idx_a = {a: np.where(actor_a == a)[0] for a in actor_list}
-        idx_b = {a: np.where(actor_b == a)[0] for a in actor_list}
+    seeds_present = sorted(per_clip_df["seed"].unique())
+    if len(seeds_present) < 3:
+        print(f"NOTE: only seed(s) {seeds_present} present this run -- the real test-set run uses all 3 seeds per FINAL_EVAL_PLAN.md.")
 
-        point_a = f1_score(y_true_a, y_pred_a, labels=CLASS_ORDER, average="macro")
-        point_b = f1_score(y_true_b, y_pred_b, labels=CLASS_ORDER, average="macro")
+    def select(method: str, variant: str, audio_name: str, occ_type: str | None = None, severity: float | None = None):
+        def _sel(s: int) -> pd.DataFrame:
+            m = (per_clip_df["seed"] == s) & (per_clip_df["method"] == method) & (per_clip_df["model_variant"] == variant) & (per_clip_df["audio_branch"] == audio_name)
+            if occ_type is not None:
+                m = m & (per_clip_df["occlusion_type"] == occ_type)
+            if severity is not None:
+                m = m & (per_clip_df["severity"] == severity)
+            return per_clip_df[m]
+        return _sel
 
-        rng = np.random.default_rng(seed)
+    def _actor_index(sub: pd.DataFrame) -> tuple[np.ndarray, np.ndarray, dict]:
+        y_true, y_pred = sub["y_true"].to_numpy(), sub["y_pred"].to_numpy()
+        actor = sub["clip_id"].map(clip_to_actor).to_numpy()
+        idx = {a: np.where(actor == a)[0] for a in actor_list}
+        return y_true, y_pred, idx
+
+    def paired_bootstrap(sel_a, sel_b, label: str, n_bootstrap: int = 2000, boot_seed: int = 0) -> None:
+        """Amendment (b): the resampling unit is the ACTOR. Each of the
+        n_bootstrap draws picks actor_list-many actors with replacement, and
+        for a drawn actor every one of its clips (across whatever condition
+        scope sel_a/sel_b already filtered to) is pooled together -- no
+        separate clip-level or condition-level resampling.
+        Amendment (c): when more than one seed is present, EVERY draw reuses
+        the SAME resampled actor set across all seeds, computes that draw's
+        paired diff per seed, and averages those diffs -- the primary result
+        is this seed-averaged diff and its 95% CI, not a per-seed CI average."""
+        per_seed_data = {}
+        for s in seeds_present:
+            sub_a, sub_b = sel_a(s), sel_b(s)
+            if sub_a.empty or sub_b.empty:
+                continue
+            per_seed_data[s] = (_actor_index(sub_a), _actor_index(sub_b))
+        if not per_seed_data:
+            print(f"{label}: no data")
+            return
+
+        seeds_here = sorted(per_seed_data.keys())
+        per_seed_point = {}
+        for s in seeds_here:
+            (yt_a, yp_a, _), (yt_b, yp_b, _) = per_seed_data[s]
+            per_seed_point[s] = f1_score(yt_a, yp_a, labels=CLASS_ORDER, average="macro") - f1_score(yt_b, yp_b, labels=CLASS_ORDER, average="macro")
+        point_avg = float(np.mean(list(per_seed_point.values())))
+
+        rng = np.random.default_rng(boot_seed)
+        n_seeds_here = len(seeds_here)
         diffs = np.empty(n_bootstrap)
         for b in range(n_bootstrap):
-            resampled = rng.choice(actor_list, size=len(actor_list), replace=True)
-            ia = np.concatenate([idx_a[a] for a in resampled])
-            ib = np.concatenate([idx_b[a] for a in resampled])
-            fa = f1_score(y_true_a[ia], y_pred_a[ia], labels=CLASS_ORDER, average="macro")
-            fb = f1_score(y_true_b[ib], y_pred_b[ib], labels=CLASS_ORDER, average="macro")
-            diffs[b] = fa - fb
+            resampled = rng.choice(actor_list, size=len(actor_list), replace=True)  # same resampled actor set reused for every seed in this draw
+            seed_diffs = np.empty(n_seeds_here)
+            for i, s in enumerate(seeds_here):
+                (yt_a, yp_a, idx_a), (yt_b, yp_b, idx_b) = per_seed_data[s]
+                ia = np.concatenate([idx_a[a] for a in resampled])
+                ib = np.concatenate([idx_b[a] for a in resampled])
+                fa = f1_score(yt_a[ia], yp_a[ia], labels=CLASS_ORDER, average="macro")
+                fb = f1_score(yt_b[ib], yp_b[ib], labels=CLASS_ORDER, average="macro")
+                seed_diffs[i] = fa - fb
+            diffs[b] = seed_diffs.mean()
         ci_lo, ci_hi = np.percentile(diffs, [2.5, 97.5])
         p_value = 2 * min((diffs <= 0).mean(), (diffs >= 0).mean())
-        print(f"{label}: point diff={point_a - point_b:+.4f} (a={point_a:.4f}, b={point_b:.4f})  95% CI=[{ci_lo:+.4f}, {ci_hi:+.4f}]  p={p_value:.4f}")
 
-    seeds_present = sorted(per_clip_df["seed"].unique())
-    seed0 = seeds_present[0]
-    print(f"(using seed={seed0} per-clip predictions; a full run should pool/average across all seeds)")
+        per_seed_str = ", ".join(f"seed{s}={d:+.4f}" for s, d in per_seed_point.items())
+        if n_seeds_here == 1:
+            print(f"{label}: diff={point_avg:+.4f}  95% CI=[{ci_lo:+.4f}, {ci_hi:+.4f}]  p={p_value:.4f}  (seed {seeds_here[0]} only)")
+        else:
+            print(f"{label}: diff={point_avg:+.4f} (seed-averaged, {n_seeds_here} seeds)  95% CI=[{ci_lo:+.4f}, {ci_hi:+.4f}]  p={p_value:.4f}  [per-seed: {per_seed_str}]")
 
+    print("\n### PRIMARY comparisons (amendment, 2026-11-13) ###")
+
+    print("\nP1: fixed 50/50 fusion (aug_all + WavLM) vs WavLM alone -- does the face add to a strong voice model?")
+    paired_bootstrap(select("fixed_5050", "aug_all", "wavlm"), select("audio_only", "aug_all", "wavlm"), "  P1 pooled (all 13 conditions)")
+    for occ_type, severity in ALL_CONDITIONS:
+        paired_bootstrap(select("fixed_5050", "aug_all", "wavlm", occ_type, severity), select("audio_only", "aug_all", "wavlm", occ_type, severity), f"  P1 [{occ_type} {severity}]")
+
+    print("\nP2: aug_no_mask vs clean-trained face-only, under mask only (unchanged from the original plan)")
+    for severity in OCC_CFG["severities"]:
+        paired_bootstrap(select("face_only", "aug_no_mask", "wavlm", "mask", severity), select("face_only", "clean", "wavlm", "mask", severity), f"  P2 [mask {severity}]")
+
+    print("\nP3: confidence-weighted fusion (max-prob, calibrated) vs fixed 50/50 (aug_all + WavLM) -- the original hypothesis test")
+    paired_bootstrap(select("conf_maxprob", "aug_all", "wavlm"), select("fixed_5050", "aug_all", "wavlm"), "  P3 pooled (all 13 conditions)")
+    for occ_type, severity in ALL_CONDITIONS:
+        paired_bootstrap(select("conf_maxprob", "aug_all", "wavlm", occ_type, severity), select("fixed_5050", "aug_all", "wavlm", occ_type, severity), f"  P3 [{occ_type} {severity}]")
+
+    print("\n### SECONDARY comparisons (original eGeMAPS-based tests, still reported) ###")
     for variant in FACE_VARIANT_CKPT:
         for audio_name in ["egemaps_tuned", "wavlm"]:
-            fused = per_clip_df[(per_clip_df["seed"] == seed0) & (per_clip_df["audio_branch"] == audio_name) & (per_clip_df["model_variant"] == variant) & (per_clip_df["method"] == "fixed_5050")]
-            audio_only = per_clip_df[(per_clip_df["seed"] == seed0) & (per_clip_df["audio_branch"] == audio_name) & (per_clip_df["model_variant"] == variant) & (per_clip_df["method"] == "audio_only")]
-            if fused.empty or audio_only.empty:
-                continue
-            paired_bootstrap(fused, audio_only, f"fusion(fixed_5050) vs audio_only [{audio_name}, face={variant}, pooled all conditions]")
-
-    # face_only doesn't depend on the audio branch -- use whichever one is present, once each.
-    face_only_rows = per_clip_df[per_clip_df["seed"] == seed0]
-    any_audio_name = face_only_rows["audio_branch"].iloc[0]
-    for severity in OCC_CFG["severities"]:
-        aug_no_mask = face_only_rows[(face_only_rows["audio_branch"] == any_audio_name) & (face_only_rows["model_variant"] == "aug_no_mask") & (face_only_rows["method"] == "face_only") & (face_only_rows["occlusion_type"] == "mask") & (face_only_rows["severity"] == severity)]
-        clean_trained = face_only_rows[(face_only_rows["audio_branch"] == any_audio_name) & (face_only_rows["model_variant"] == "clean") & (face_only_rows["method"] == "face_only") & (face_only_rows["occlusion_type"] == "mask") & (face_only_rows["severity"] == severity)]
-        if aug_no_mask.empty or clean_trained.empty:
-            continue
-        paired_bootstrap(aug_no_mask, clean_trained, f"aug_no_mask vs clean-trained face-only [under mask {severity}]")
+            paired_bootstrap(select("fixed_5050", variant, audio_name), select("audio_only", variant, audio_name), f"  fusion(fixed_5050) vs audio_only [{audio_name}, face={variant}, pooled]")
 
 
 if __name__ == "__main__":
