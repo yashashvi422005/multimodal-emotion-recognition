@@ -614,3 +614,65 @@ effect, exactly the mechanism documented in rounds 2-3 and round 6-7.
   / 0.7317 / 1.2174; face `aug_all` 1.1623 / 0.8026 / 1.0353; face `aug_no_mask` 0.9659 / 0.9438 / 0.9885
   — all in a fairly narrow band around 1.0, i.e. the original softmax outputs were already reasonably
   calibrated, with no single seed's face model wildly over- or under-confident.
+
+### Derived from the committed test predictions (no re-run)
+
+Everything below is computed *only* from the already-saved outputs of the single `--final` run above
+(`outputs/evaluate_test_by_seed.csv`, `..._table.csv`, `..._per_clip.csv`) — no model inference, no
+re-run of `evaluate.py --final`, nothing about the frozen run changes. `scripts/27_test_derived_analysis.py`.
+
+**1. Fixed 50/50 fusion on CLEAN faces (+ WavLM), per-seed and mean ± std:**
+
+| face variant | seed 0 | seed 1 | seed 2 | mean ± std |
+|---|---|---|---|---|
+| clean-trained | 0.7851 | 0.7846 | 0.7565 | 0.7754 ± 0.0163 |
+| `aug_all` | 0.7836 | 0.7835 | 0.7671 | 0.7781 ± 0.0095 |
+| `aug_no_mask` | 0.7783 | 0.7900 | 0.7659 | 0.7781 ± 0.0120 |
+
+This was the one gap in the "Fusion, pooled over the 12 occlusion conditions" table above (which
+deliberately excludes clean) and the "clean-condition fixed-50/50" row the VAL round-7 table had but
+this test write-up hadn't filled in until now.
+
+**2. Per-seed scores for rows already reported above:**
+
+Face-only, clean condition (cross-checks the mean ± std already in "Face branch alone, clean
+condition" exactly):
+
+| variant | seed 0 | seed 1 | seed 2 | mean ± std |
+|---|---|---|---|---|
+| clean-trained | 0.6062 | 0.5893 | 0.6195 | 0.6050 ± 0.0151 |
+| `aug_all` | 0.6111 | 0.6283 | 0.6286 | 0.6227 ± 0.0100 |
+| `aug_no_mask` | 0.6335 | 0.6421 | 0.6153 | 0.6303 ± 0.0137 |
+
+Pooled over the 12 occlusion conditions, `fixed_5050` only (full 36-row table — every method × variant
+× audio branch — in `outputs/test_derived_pooled_per_seed.csv`; means below cross-check exactly against
+the "Fusion, pooled over the 12 occlusion conditions" table above):
+
+| face variant | audio branch | seed 0 | seed 1 | seed 2 | mean ± std |
+|---|---|---|---|---|---|
+| clean-trained | eGeMAPS | 0.5199 | 0.5237 | 0.5224 | 0.5220 ± 0.0019 |
+| `aug_all` | eGeMAPS | 0.6239 | 0.6189 | 0.6169 | 0.6199 ± 0.0036 |
+| `aug_no_mask` | eGeMAPS | 0.6121 | 0.6098 | 0.5965 | 0.6061 ± 0.0084 |
+| clean-trained | WavLM | 0.7033 | 0.7206 | 0.7075 | 0.7105 ± 0.0091 |
+| `aug_all` | WavLM | 0.7372 | 0.7534 | 0.7367 | 0.7424 ± 0.0095 |
+| `aug_no_mask` | WavLM | 0.7360 | 0.7472 | 0.7325 | 0.7386 ± 0.0077 |
+
+**3. Actor-level bootstrap 95% CIs for absolute macro-F1** (resample the 12 test actors, B=2000,
+seed-averaged per draw — identical method to P1-P3, just a single arm instead of a paired difference):
+
+| | point estimate | 95% CI |
+|---|---|---|
+| eGeMAPS (tuned) | 0.5044 | [0.4576, 0.5424] |
+| WavLM | 0.7049 | [0.6269, 0.7616] |
+| face clean-trained (clean) | 0.6050 | [0.5034, 0.6987] |
+| face `aug_all` (clean) | 0.6227 | [0.5207, 0.7143] |
+| face `aug_no_mask` (clean) | 0.6303 | [0.5196, 0.7279] |
+| fixed fusion (`aug_all` + WavLM, clean) | 0.7781 | [0.7071, 0.8400] |
+| fixed fusion (`aug_all` + WavLM, pooled 12) | 0.7425 | [0.6663, 0.8032] |
+
+All CIs are wide relative to the point estimate — expected at only 12 test actors, same caveat as every
+other actor-level estimate in this project. Note these are independent single-arm CIs, so e.g. fixed
+fusion's [0.7071, 0.8400] and WavLM's [0.6269, 0.7616] visibly overlap even though P1 found the paired
+difference between them significant — standalone CIs computed this way don't account for the
+actor-to-actor correlation between the two scores on the *same* resampled actors, which is exactly why
+P1's paired bootstrap (not these single-arm CIs) is the actual significance test for that comparison.
