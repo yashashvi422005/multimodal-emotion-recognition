@@ -654,17 +654,21 @@ roughly uniform across age groups; and the age gap's *widening* from clean to `a
 confirmed effect for fusion specifically (CI [+0.006, +0.075]), though not confirmed for the face branch
 alone.
 
-## Final evaluation plan (pre-registered, not yet executed)
+## Final evaluation — complete
 
-See `FINAL_EVAL_PLAN.md` — committed before any test-set code runs. Specifies the exact models (3 face
-variants × 3 seeds, tuned eGeMAPS, WavLM × 3 seeds — all now locked and present, no retraining needed),
-all 13 conditions, all fusion methods, macro-F1 as primary metric, and a paired actor-level bootstrap
-over the 12 test actors for two pre-registered comparisons (fixed-fusion vs. audio-only; `aug_no_mask`
-vs. clean-trained face under mask). Commits in advance to reporting whatever the test set shows.
-`evaluate.py` (repo root) has been written and dry-run on `--split val`, reproducing the face-branch and
-eGeMAPS numbers above exactly. **No test-set code has been run.** The remaining steps are building the
-test occlusion-detection cache and running `python evaluate.py --split test --final`; neither has
-started.
+See `FINAL_EVAL_PLAN.md`, pre-registered before any test-set access and **amended once** (commit
+`09e454e`, 2026-11-13, before the test run) to: freeze calibration/the learned gate on VAL rather than
+refitting on test, promote three new primary comparisons P1 (fusion vs. WavLM alone)/P2 (`aug_no_mask`
+generalization, unchanged)/P3 (confidence-weighting vs. fixed averaging — the project's original round-1
+question, finally run as a formal test), and write the abstention rule into the plan explicitly.
+
+`python evaluate.py --split test --final` ran exactly once (2026-11-14), all 3 seeds, all 3 face
+variants, both audio branches, all 13 conditions, no changes made after seeing the results. **Headline:
+the face adds significantly to a strong voice model (P1, every condition), occlusion-augmented training
+generalizes to the unseen `mask` type (P2, every severity), and fixed 50/50 fusion significantly beats
+confidence-weighting pooled (P3) — though not in every individual condition, reported exactly as it
+came out.** Full results, every number, including the non-significant P3 conditions: `RESULTS.md`,
+"Final test results."
 
 ## Project structure
 
@@ -746,8 +750,7 @@ round 6's 10/13) — full results are in `RESULTS.md` round 7, which supersedes 
 
 ## Later phases (not started)
 
-A fusion weighting signal that handles the `mask`-style confident-collapse failure mode — now shown
-(round 2, and again in round 6 with a much stronger WavLM audio branch) to persist even against a more
-occlusion-robust face model, so the fix needs to target the weighting mechanism itself, not just the
-face model's robustness → final evaluation on the frozen test set (per `FINAL_EVAL_PLAN.md`, now fully
-locked and ready — `evaluate.py --final` not yet written) → Gradio demo.
+Final test-set evaluation is **done** (see above). Remaining: a fusion weighting signal that handles the
+`mask`-style confident-collapse failure mode — shown to persist from round 2 through the final test
+results (P3 above) across every audio branch tried, so the fix needs to target the weighting mechanism
+itself, not just the face model's robustness → Gradio demo.

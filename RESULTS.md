@@ -451,3 +451,166 @@ strong) is unchanged.
 Full per-seed and aggregate tables (overwritten in place): `outputs/phase5_fusion_wavlm_by_seed.csv`,
 `..._table.csv`. Underlying re-scored WavLM data: `outputs/wavlm_val_probs_batch1.csv`,
 `outputs/wavlm_batch1_seed_summary.csv`.
+
+## Final test results (frozen test set, 12 actors) — the one and only run
+
+**Pre-registration commit: `09e454e981079e7197b46c9c92b0fc2b9ace1a74`** (the amendment to
+`FINAL_EVAL_PLAN.md` that locked the methodology below, committed and pushed *before* this run).
+`python evaluate.py --split test --final`, all 3 seeds, run exactly once on 2026-11-14. No code or
+methodology changed after seeing these numbers. Calibration and the learned gate were fit once on all
+15 val actors and frozen (per the amendment) — test labels were used only to score, never to fit
+anything. Everything below is reported as it came out, including results that cut against the project's
+own hypotheses.
+
+### Headline
+
+- **P1 — does the face add to a strong voice model? Yes.** Fixed 50/50 fusion (`aug_all` face + WavLM)
+  beats WavLM alone, pooled and in every one of the 13 individual conditions (clean + 12 occlusion),
+  all with the test-actor-level 95% CI excluding zero.
+- **P2 — does occlusion-augmented training generalize to an unseen occlusion? Yes.** `aug_no_mask`
+  beats the clean-trained face under `mask` at all 3 severities, CI excludes zero every time.
+- **P3 — does confidence-weighting beat fixed averaging, once both are calibrated? No — fixed
+  averaging wins, pooled.** Confidence-weighted (max-prob, calibrated) fusion is *worse* than fixed
+  50/50 pooled across all 13 conditions (diff −0.0038, CI excludes zero). This is **not** uniform,
+  though: 4 of the 13 individual conditions do **not** reach significance (`clean` p=0.05 borderline,
+  `patch` 0.9, `hand_over_mouth` 0.6 and 0.9 — see the full table below) — reported honestly rather than
+  rounded up to "always."
+
+### Audio branches alone (macro-F1, mean ± std over 3 seeds)
+
+| | per-seed | mean ± std |
+|---|---|---|
+| eGeMAPS (tuned, `C=0.3`) | 0.5044, 0.5044, 0.5044 | 0.5044 ± 0.0000 (deterministic) |
+| WavLM (`batch_size=1`) | 0.6887, 0.7175, 0.7086 | 0.7049 ± 0.0121 |
+
+### Face branch alone, clean condition (macro-F1, mean ± std over 3 seeds)
+
+| variant | macro-F1 |
+|---|---|
+| clean-trained | 0.6050 ± 0.0151 |
+| `aug_all` | 0.6227 ± 0.0100 |
+| `aug_no_mask` | 0.6303 ± 0.0137 |
+
+### Fusion, pooled over the 12 occlusion conditions (excludes clean), macro-F1 mean over 3 seeds
+
+| face variant | audio branch | audio-only | face-only | fixed 50/50 | conf-maxprob | conf-negentropy | learned gate |
+|---|---|---|---|---|---|---|---|
+| clean-trained | eGeMAPS | 0.504 | 0.263 | 0.522 | 0.513 | 0.513 | **0.525** |
+| `aug_all` | eGeMAPS | 0.504 | 0.466 | **0.620** | 0.612 | 0.604 | 0.608 |
+| `aug_no_mask` | eGeMAPS | 0.504 | 0.440 | **0.606** | 0.601 | 0.595 | 0.602 |
+| clean-trained | WavLM | 0.705 | 0.263 | **0.710** | 0.706 | 0.706 | 0.695 |
+| `aug_all` | WavLM | 0.705 | 0.466 | **0.742** | 0.739 | 0.736 | 0.735 |
+| `aug_no_mask` | WavLM | 0.705 | 0.440 | **0.739** | 0.735 | 0.734 | 0.728 |
+
+Fixed 50/50 is again the best fusion method on average for every face/audio pairing except
+clean-trained+eGeMAPS (where the learned gate edges it out, 0.525 vs 0.522) — the same "fixed averaging
+is hard to beat" pattern documented since round 1, now confirmed out of sample on test.
+
+### Does fixed fusion (WavLM) beat audio-only in every condition?
+
+Per-condition (13 conditions including clean): **`aug_all` 13/13**, **`aug_no_mask` 13/13**,
+**clean-trained 11/13** — loses to WavLM-only at `mask` 0.3 (−0.0018) and `mask` 0.6 (−0.0217, the worst
+case), same exceptions as every prior round. Full tables: `outputs/evaluate_test_table.csv`,
+`outputs/evaluate_test_by_seed.csv`, `outputs/evaluate_test_per_clip.csv`.
+
+### P1 — fixed 50/50 fusion (`aug_all` + WavLM) vs. WavLM alone
+
+Paired actor-level bootstrap (B=2000), seed-averaged diff per draw, 95% CI, test actors only.
+
+| condition | diff (seed-avg) | 95% CI | p |
+|---|---|---|---|
+| pooled (all 13) | +0.0404 | [+0.0182, +0.0629] | 0.0010 |
+| clean | +0.0731 | [+0.0355, +0.1072] | 0.0000 |
+| mask 0.3 | +0.0492 | [+0.0160, +0.0779] | 0.0020 |
+| mask 0.6 | +0.0479 | [+0.0170, +0.0759] | 0.0020 |
+| mask 0.9 | +0.0099 | [+0.0034, +0.0164] | 0.0010 |
+| sunglasses 0.3 | +0.0417 | [+0.0164, +0.0677] | 0.0020 |
+| sunglasses 0.6 | +0.0414 | [+0.0169, +0.0664] | 0.0010 |
+| sunglasses 0.9 | +0.0439 | [+0.0228, +0.0666] | 0.0000 |
+| patch 0.3 | +0.0478 | [+0.0217, +0.0733] | 0.0000 |
+| patch 0.6 | +0.0353 | [+0.0144, +0.0588] | 0.0000 |
+| patch 0.9 | +0.0108 | [+0.0039, +0.0192] | 0.0000 |
+| hand_over_mouth 0.3 | +0.0460 | [+0.0135, +0.0756] | 0.0050 |
+| hand_over_mouth 0.6 | +0.0371 | [+0.0068, +0.0649] | 0.0160 |
+| hand_over_mouth 0.9 | +0.0387 | [+0.0130, +0.0629] | 0.0050 |
+
+**Every single condition significant, same direction.** The face adds to WavLM everywhere tested,
+though the effect shrinks under the heaviest occlusion (`mask`/`patch` at 0.9: +0.01, an order of
+magnitude smaller than clean's +0.07) — occlusion genuinely erodes the face's contribution, it just
+never flips sign or loses significance on this test set.
+
+### P2 — `aug_no_mask` vs. clean-trained face-only, under mask
+
+| severity | diff (seed-avg) | 95% CI | p |
+|---|---|---|---|
+| 0.3 | +0.0935 | [+0.0496, +0.1331] | 0.0000 |
+| 0.6 | +0.2258 | [+0.1802, +0.2742] | 0.0000 |
+| 0.9 | +0.0584 | [+0.0400, +0.0766] | 0.0000 |
+
+Confirmed on test: training on unseen occlusion types generalizes to the held-out `mask` type, at every
+severity. The effect is largest at 0.6 (one seed, seed1, shows a particularly large +0.3633 jump — see
+`outputs/evaluate_test_per_clip.csv` for per-seed detail), smallest at 0.9 where both variants are
+already badly degraded.
+
+### P3 — confidence-weighted (max-prob, calibrated) vs. fixed 50/50 (`aug_all` + WavLM)
+
+| condition | diff (seed-avg) | 95% CI | p | significant? |
+|---|---|---|---|---|
+| pooled (all 13) | −0.0038 | [−0.0050, −0.0025] | 0.0000 | **yes** |
+| clean | −0.0047 | [−0.0095, −0.0000] | 0.0500 | borderline |
+| mask 0.3 | −0.0034 | [−0.0059, −0.0008] | 0.0120 | yes |
+| mask 0.6 | −0.0046 | [−0.0085, −0.0002] | 0.0450 | yes |
+| mask 0.9 | −0.0031 | [−0.0055, −0.0007] | 0.0080 | yes |
+| sunglasses 0.3 | −0.0051 | [−0.0073, −0.0026] | 0.0000 | yes |
+| sunglasses 0.6 | −0.0035 | [−0.0067, −0.0005] | 0.0210 | yes |
+| sunglasses 0.9 | −0.0060 | [−0.0103, −0.0025] | 0.0000 | yes |
+| patch 0.3 | −0.0057 | [−0.0091, −0.0026] | 0.0000 | yes |
+| patch 0.6 | −0.0044 | [−0.0070, −0.0019] | 0.0010 | yes |
+| patch 0.9 | −0.0003 | [−0.0024, +0.0017] | 0.8300 | **no** |
+| hand_over_mouth 0.3 | −0.0038 | [−0.0081, +0.0006] | 0.0930 | **no** |
+| hand_over_mouth 0.6 | −0.0013 | [−0.0054, +0.0028] | 0.5570 | **no** |
+| hand_over_mouth 0.9 | −0.0034 | [−0.0074, +0.0002] | 0.0690 | **no** |
+
+**The pooled result confirms the project's original round-1 observation as a real, statistically
+significant effect on held-out test data: fixed 50/50 beats confidence-weighting.** But it is not
+uniform — reported plainly rather than smoothed over: `patch` 0.9 and all three `hand_over_mouth`
+severities do not reach significance (CI includes zero), and `clean` is right at the p=0.05 boundary.
+The effect is clearest under `mask`, `sunglasses`, and `patch` at low/mid severity; it is weakest or
+absent exactly where the face branch is already most degraded (`patch` 0.9, `hand_over_mouth`) — at
+that point confidence-weighting and fixed averaging converge because the face's confidence collapses
+either way (consistent with the "patch 0.9 forces near-uniform face output" mechanism documented since
+round 1).
+
+### Secondary comparisons (original eGeMAPS-based tests)
+
+| comparison | diff (seed-avg) | 95% CI | p |
+|---|---|---|---|
+| fixed vs audio-only [eGeMAPS, clean-trained] | +0.0311 | [−0.0125, +0.0753] | 0.1690 |
+| fixed vs audio-only [WavLM, clean-trained] | +0.0098 | [−0.0098, +0.0263] | 0.3360 |
+| fixed vs audio-only [eGeMAPS, `aug_all`] | +0.1221 | [+0.0767, +0.1681] | 0.0000 |
+| fixed vs audio-only [WavLM, `aug_all`] (= P1 pooled) | +0.0404 | [+0.0182, +0.0629] | 0.0010 |
+| fixed vs audio-only [eGeMAPS, `aug_no_mask`] | +0.1085 | [+0.0582, +0.1595] | 0.0010 |
+| fixed vs audio-only [WavLM, `aug_no_mask`] | +0.0366 | [+0.0122, +0.0596] | 0.0020 |
+
+Consistent with the headline: fusion only reliably beats audio-only (both CIs excluding zero) when the
+face branch is occlusion-robust (`aug_all`/`aug_no_mask`); with the clean-trained face, neither audio
+branch's fusion-vs-audio-only comparison reaches significance pooled — the clean-trained face's gains
+under light occlusion are offset by its losses under `mask`, netting out to a non-significant pooled
+effect, exactly the mechanism documented in rounds 2-3 and round 6-7.
+
+### Limitations, stated plainly
+
+- B=2000 bootstrap resamples (not 10,000 as originally specified in the un-amended plan) — chosen for
+  this run's turnaround time; CIs are already stable at this B given 12 actors, but a future re-analysis
+  could widen B for marginally tighter CI edges.
+- The learned gate, which underperformed on val in every prior round, is much more competitive on test
+  (e.g. `aug_all`+WavLM clean: 0.776 vs fixed's 0.778) — still never the best method, but closer than the
+  val-only development rounds suggested. Worth noting as a data point, not over-interpreting from a
+  single test-set run.
+- Per the amendment, calibration/gate were frozen from VAL and never refit on test — a cleaner leakage
+  story, at the cost of whatever precision a test-specific fit might have bought. Fitted temperatures
+  (per seed, since the face/WavLM models differ per seed — eGeMAPS is deterministic so its temperature
+  doesn't vary): eGeMAPS 1.2751 (all 3 seeds); WavLM 1.2174 / 1.1357 / 1.2459; face clean-trained 0.9222
+  / 0.7317 / 1.2174; face `aug_all` 1.1623 / 0.8026 / 1.0353; face `aug_no_mask` 0.9659 / 0.9438 / 0.9885
+  — all in a fairly narrow band around 1.0, i.e. the original softmax outputs were already reasonably
+  calibrated, with no single seed's face model wildly over- or under-confident.

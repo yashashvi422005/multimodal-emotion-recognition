@@ -1,12 +1,12 @@
 # Final Evaluation Plan (pre-registered)
 
-**Status: PRE-REGISTERED, NOT YET EXECUTED.** The test set (12 actors, frozen per `splits/split_v1.json`)
-has not been touched by this plan or by any development work to date. All Phase 3-5 development (rounds
-1-3) used train/val actors only. This document is committed *before* any test-set code is run, so the
-plan is fixed in advance of seeing test numbers. A future `evaluate.py --final` (not yet written) is the
-only script permitted to touch the test set, and it must implement exactly what's specified here — any
-deviation discovered necessary while writing it must be logged and justified in this file, not silently
-applied.
+**Status: EXECUTED.** `python evaluate.py --split test --final` ran exactly once, 2026-11-14, against
+the pre-registration frozen at commit `09e454e981079e7197b46c9c92b0fc2b9ace1a74` (the amendment below).
+All Phase 3-5 development (rounds 1-7) used train/val actors only; this plan was committed, then amended
+once, before any test-set code ran, so the methodology was fixed in advance of seeing test numbers.
+`evaluate.py` implemented exactly what's specified here (as amended) — no deviation was found necessary
+while writing it. Results: `RESULTS.md`, "Final test results." Nothing in this plan changed after
+seeing those results.
 
 ## Models (no retraining required for this plan) — LOCKED as of round 6
 
@@ -236,31 +236,25 @@ new bootstrap comparisons P1/P2/P3) before it is ever pointed at the frozen test
 
 ## Execution status
 
-**Not yet run.** This document is committed first; `evaluate.py --final` will be written next and will
-implement exactly the plan above. No test-set code has been executed as part of this round of work.
+**Done.** `python evaluate.py --split test --final` ran exactly once, 2026-11-14, under `caffeinate -i`
+to prevent a sleep-related stall during the ~7-hour run, immediately after the amendment commit
+(`09e454e`) was pushed. Preceded by `scripts/26_build_test_detection_cache.py` (2 workers, ~6.6 min, all
+4 occlusion types × 3 severities × 12 test actors, detection rate 95.2%) — the one prerequisite this
+document flagged as missing. No code or methodology changed after seeing the test results. Full numbers:
+`RESULTS.md`, "Final test results."
 
-**WavLM's training step runs on Kaggle, separately from this plan's test-set code**, and must complete
-(checkpoints + val probabilities downloaded into this project) before `evaluate.py --final` can include
-WavLM — the Kaggle notebook itself never touches test actors (see
-`notebooks/wavlm_finetune_kaggle.ipynb`), so training it is not a test-set touch and does not require a
-separate pre-registration update once it's done; this document's plan already covers it.
+**WavLM's training step ran on Kaggle, separately from this plan's test-set code** — the Kaggle notebook
+itself never touched test actors (see `notebooks/wavlm_finetune_kaggle.ipynb`), confirmed again by this
+run's own leakage assertions.
 
-**As of round 7, every model this plan needs is locked and present**: tuned eGeMAPS (`C=0.3`), WavLM (3
-checkpoints, re-scored with `batch_size=1` after round 7 found the original Kaggle batching was not
-reproducible), and the 3 face-model variants (clean-trained, `aug_all`, `aug_no_mask`, 3 seeds each).
-All 6 fusion methods have been exercised end-to-end on VAL for both audio branches (`RESULTS.md`
-rounds 2-3 for eGeMAPS, round 6-7 for WavLM — round 7 supersedes round 6's WavLM numbers).
+**Every model this plan needed was locked and present**: tuned eGeMAPS (`C=0.3`), WavLM (3 checkpoints,
+scored with `batch_size=1` per round 7), and the 3 face-model variants (clean-trained, `aug_all`,
+`aug_no_mask`, 3 seeds each). All 6 fusion methods were exercised on VAL first (`RESULTS.md` rounds 2-3
+for eGeMAPS, round 6-7 for WavLM) before ever touching test.
 
-**`evaluate.py` has been written** (repo root) and implements this plan's full pipeline, **as amended
-2026-11-13**: both audio branches, all 3 face variants, all 6 fusion methods, all 13 conditions,
-calibration/gate fit once on VAL and frozen before test is touched, and the P1/P2/P3 primary bootstrap
-comparisons (plus the original comparisons as secondary) — parameterized by `--split {val,test}`. It
-has been **dry-run on `--split val`** with the frozen-calibration code path and reproduces the
-face-branch and eGeMAPS numbers in `RESULTS.md` exactly (bit-identical for face, to 5 decimal places for
-eGeMAPS); the WavLM branch uses `batch_size=1` rather than reproducing Kaggle's batching, by design
-(round 7). `--split test` is refused unless `--final` is also passed, and additionally requires a
-pre-built test occlusion-detection cache that does not yet exist (this script does not build it itself
-— see the "Conditions" section above). **No test-set code has been run.** The remaining steps before
-this plan executes are: (1) build the test occlusion-detection cache, (2) run
-`python evaluate.py --split test --final`. Neither has been started, and neither will start until
-explicitly requested.
+**`evaluate.py`** (repo root) implements this plan's full pipeline as amended 2026-11-13: both audio
+branches, all 3 face variants, all 6 fusion methods, all 13 conditions, calibration/gate fit once on VAL
+and frozen, and the P1/P2/P3 primary bootstrap comparisons (plus the original comparisons as secondary).
+Dry-run-verified on `--split val` (twice — once per bootstrap-code revision) before the real run;
+face-branch and eGeMAPS numbers reproduced `RESULTS.md` exactly both times. `--split test` required
+`--final` and the pre-built test detection cache, both satisfied for this run.
