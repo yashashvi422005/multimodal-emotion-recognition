@@ -76,10 +76,10 @@ Transactions on Affective Computing), generalizes this to handle misaligned moda
 structure, and missing features together. Chumachenko, Iosifidis, and Gabbouj (2022; ICPR) propose a
 self-attention fusion architecture evaluated with incomplete audio-visual data and report that dropping
 modalities during training improves robustness when a modality is absent or noisy at test time, without
-hurting standard-condition performance. We are also aware, by title only, of work on reliability-aware
-multimodal emotion recognition reporting mixed results under video corruption that may include CREMA-D
-[CITATION NEEDED] — we could not verify its authorship, venue, or whether it uses CREMA-D specifically
-closely enough to cite it with a complete reference, and leave it as a placeholder rather than guess.
+hurting standard-condition performance. Hassanie, Goyal, Ali, and Khan (2026; IEEE Access, vol. 14, pp.
+96162-96175) study reliability-aware multimodal emotion recognition under heterogeneous and corrupted
+audio-visual conditions and report mixed results under video corruption, consistent with the negative
+P3 result reported here (Section 6).
 None of this missing/degraded-modality work that we were able to verify evaluates *deliberately,
 systematically occluded faces* across multiple occlusion types and severities with a fixed-vs-confidence-
 weighted fusion comparison, which is the specific gap this work addresses; we narrow our claimed
