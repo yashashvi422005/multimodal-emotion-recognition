@@ -16,28 +16,50 @@ The research question above is answered on the frozen 12-actor test set, evaluat
 (`python evaluate.py --split test --final`, 2026-11-14) against the plan pre-specified and committed at
 `09e454e` before any test-set access.
 
-| | Test macro-F1 (mean ± std, 3 seeds) |
-|---|---|
-| eGeMAPS + LR (tuned) | 0.5044 ± 0.0000 |
-| WavLM | 0.7049 ± 0.0121 |
-| Face (clean-trained), clean | 0.6050 ± 0.0151 |
-| Face (`aug_all`), clean | 0.6227 ± 0.0100 |
-| Face (`aug_no_mask`), clean | 0.6303 ± 0.0137 |
-| Fixed 50/50 fusion (`aug_all` face + WavLM), clean | **0.7781 ± 0.0095** |
-| Fixed 50/50 fusion (`aug_all` face + WavLM), pooled over 12 synthetic-occlusion conditions | **0.7425** |
+| | Test macro-F1 (mean ± std, 3 seeds) | Actor-bootstrap 95% CI |
+|---|---|---|
+| eGeMAPS + LR (tuned, deterministic) | 0.5044 ± 0.0000 | [0.4576, 0.5424] |
+| WavLM (per-seed: 0.6887, 0.7175, 0.7086) | 0.7049 ± 0.0121 | [0.6269, 0.7616] |
+| Face (clean-trained), clean | 0.6050 ± 0.0151 | [0.5034, 0.6987] |
+| Face (`aug_all`), clean | 0.6227 ± 0.0100 | [0.5207, 0.7143] |
+| Face (`aug_no_mask`), clean | 0.6303 ± 0.0137 | [0.5196, 0.7279] |
+| Fixed 50/50 fusion (`aug_all` face + WavLM), clean | **0.7781 ± 0.0095** | [0.7071, 0.8400] |
+| Fixed 50/50 fusion (`aug_all` face + WavLM), pooled over 12 synthetic-occlusion conditions | **0.7424 ± 0.0095** | [0.6663, 0.8032] |
+
+Std convention, exactly as committed in `RESULTS.md` and not unified here: eGeMAPS's and WavLM's ± is
+**population** standard deviation (ddof=0, from `evaluate.py`'s scoring loop); every face and fusion
+row's ± is **sample** standard deviation (ddof=1, from the derived-analysis script). Confidence
+intervals are an actor-level bootstrap (B=2000, 12 test actors, seed-averaged per draw), from
+`RESULTS.md`'s "Derived from the committed test predictions" section, commit `6f247d9`.
 
 - **P1** (fusion vs. WavLM alone): the fusion significantly beats voice alone in every one of 13
-  conditions (clean + 12 synthetic-occlusion conditions).
+  conditions (clean + 12 synthetic-occlusion conditions), with the effect largest on clean faces
+  (+0.073) and shrinking to about +0.01 under the heaviest occlusion (`mask`/`patch` at severity 0.9),
+  but never losing significance or reversing sign.
 - **P2** (`aug_no_mask` vs. clean-trained face-only, under the held-out mask type): significant at
-  every severity — occlusion-augmented training generalizes to an unseen occlusion type.
+  every severity — occlusion-augmented training generalizes to an unseen occlusion type, though
+  hand-over-mouth, seen in training, covers a similar lower-face region to the held-out mask.
 - **P3** (confidence-weighted vs. fixed fusion): confidence-weighted fusion shows **no improvement
   over fixed averaging** — pooled, the difference is statistically detectable but practically
   negligible (−0.004) and favors fixed averaging, and this is **not uniform** across the 13 individual
-  conditions.
+  conditions. The original hypothesis was not supported.
 
 Full numbers, every condition, including results that go against the project's own hypotheses:
 `RESULTS.md`, "Final test results". Everything in the rest of this README below the validation-stage
 heading is development-stage (VAL only), superseded by the table above for any test-set claim.
+
+## Limitations
+
+- **Synthetic, landmark-placed occlusions.** All occlusion types are rendered digitally on detected
+  face landmarks, not captured from genuinely occluded recordings.
+- **Acted speech.** CREMA-D emotions are performed by actors reading fixed sentences, not spontaneous
+  affect.
+- **12 test actors, wide confidence intervals.** Every test-set CI above reflects the actor-sampling
+  uncertainty of only 12 actors.
+- **A single dataset.** All results are from CREMA-D; no cross-corpus evaluation was performed.
+- **The age-gap finding** (see the demographic fairness section below) **is a development-data
+  observation only** — computed on the 79 non-test actors with 1 training seed per fold, and was never
+  tested on the 12-actor frozen test set.
 
 ## Environment
 
@@ -59,10 +81,9 @@ pip install -r requirements.txt
 ```
 
 PyTorch runs on the Apple Silicon **MPS** backend where supported, falling
-back to CPU otherwise (no CUDA on this machine). Phases that need large-scale
-GPU training (e.g. extensive wav2vec2/WavLM fine-tuning, large hyperparameter
-sweeps) will be flagged for a move to Kaggle/Colab when reached — not decided
-up front.
+back to CPU otherwise (no CUDA on this machine). The one phase that needed
+large-scale GPU training — WavLM fine-tuning — was moved to Kaggle (see
+"WavLM audio fine-tuning" below); no other phase required it.
 
 ### Decisions made during environment setup (verified, not assumed)
 
@@ -79,15 +100,16 @@ up front.
   on this machine (torch 2.15.0).
 - **`mediapipe` 1.2.2 exposes a `mediapipe.tasks`-based API**, not the older
   `mediapipe.solutions.face_mesh` module some tutorials reference. The exact
-  Face Landmarker API will be confirmed when Phase 2 (face detection) starts.
+  Face Landmarker API was confirmed in Phase 2 (face detection): `FaceLandmarker`
+  (478 landmarks), with a RetinaFace fallback.
 
 ## Non-negotiable evaluation rules (see project instructions for full detail)
 
 1. Actor-level, speaker-independent splits — no actor in more than one of
    train/val/test. Enforced by an assertion that runs every time a split is
    loaded (`fer.splits.load_split` / `assert_no_leakage`), not just in tests.
-2. The test set is fixed on day one (`splits/split_v1.json`) and is only
-   touched by a future `evaluate.py --final`.
+2. The test set was fixed on day one (`splits/split_v1.json`) and was touched exactly once, by
+   `evaluate.py --final` (see "Final test results" above).
 3. Macro-F1 is the primary metric, reported alongside accuracy, per-class F1,
    and confusion matrices.
 4. Every reported number is mean ± std over 3 seeds.
@@ -106,6 +128,18 @@ CREMA-D is released under the Open Database License (ODbL) v1.0. The underlying 
 is released under the Database Contents License (DbCL) v1.0. See the dataset's own distribution for
 the full licence text; this project does not redistribute the dataset itself (`data/` is gitignored —
 see "Environment" below), only derived features, model outputs, and code.
+
+**This project's own code is MIT-licensed** (see [`LICENSE`](LICENSE)). That licence covers this
+repository's code only — CREMA-D itself remains under its own ODbL/DbCL licence as above and is not
+redistributed here.
+
+**To obtain the data**: clone or download it from the official repository,
+[github.com/CheyneyComputerScience/CREMA-D](https://github.com/CheyneyComputerScience/CREMA-D), and
+place it at `data/CREMA-D/` with `VideoFlash/`, `AudioWAV/`, and `VideoDemographics.csv` present (see
+`configs/data.yaml` for the exact expected paths). This repo never downloads or modifies the dataset
+itself. The `ejlok1/cremad` Kaggle mirror, used only for the WavLM fine-tuning step (see below), is a
+secondary source for the audio and is missing one canonical clip, supplied separately — see "WavLM
+audio fine-tuning" below.
 
 ## Validation-stage results (development only — superseded by the final test results above)
 
@@ -790,9 +824,31 @@ paired with the matching face-model seed); fixed 50/50 fusion still *loses* to a
 clean-trained face under `mask` (at severities 0.3 and 0.6, now 11/13 conditions won rather than
 round 6's 10/13) — full results are in `RESULTS.md` round 7, which supersedes round 6's WavLM numbers.
 
-## Later phases (not started)
+## Future work
 
-Final test-set evaluation is **done** (see above). Remaining: a fusion weighting signal that handles the
-`mask`-style confident-collapse failure mode — shown to persist from round 2 through the final test
-results (P3 above) across every audio branch tried, so the fix needs to target the weighting mechanism
-itself, not just the face model's robustness → Gradio demo.
+Final test-set evaluation is **done** (see "Final test results" at the top). The `mask`-style confident
+collapse that originally motivated the confidence-weighting hypothesis was a validation-stage
+observation on the **clean-trained** face branch (rounds 1-3); it does not describe what happened on
+the frozen test set — there, fixed fusion with the occlusion-trained face (`aug_all`) beat WavLM alone
+in every one of the 13 conditions (P1), and confidence-weighting itself was formally tested and not
+supported (P3). Remaining directions:
+
+- **Real, non-synthetic occlusions** — captured from genuinely occluded recordings (an actual mask,
+  real sunglasses, a real hand) rather than rendered digitally on detected landmarks, to test whether
+  these results transfer to real material, fit, lighting, and motion.
+- **Cross-corpus testing on [RAVDESS](https://zenodo.org/record/1188976)** (or another audio-visual
+  emotion corpus) — to check whether the P1-P3 findings here, especially the P3 null result for
+  confidence-weighting, generalize beyond CREMA-D.
+- **A public demo** (e.g. Gradio), showing the fusion pipeline live on webcam + microphone input.
+
+## About
+
+**Yashashvi Jangid**, Independent Researcher.
+
+Full technical report: [`reports/technical_report/report.pdf`](reports/technical_report/report.pdf)
+(also converted to LaTeX/PDF in preprint form at [`reports/techrxiv/`](reports/techrxiv/), not yet
+submitted anywhere).
+
+AI coding assistants (Claude Code) were used for implementation throughout, under the author's
+direction and review at every step; see the report's "Statement on the Use of AI Coding Assistants"
+for detail.
