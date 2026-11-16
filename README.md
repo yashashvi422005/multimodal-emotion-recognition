@@ -1,7 +1,7 @@
 # fer-project: Multimodal (face + voice) emotion recognition under occlusion
 
-Research question: when the face is partially occluded (masks, sunglasses,
-hands), does a late-fusion model with confidence weighting shift reliance
+Research question: when the face is occluded by synthetic occlusions (masks, sunglasses,
+hand-over-mouth, random patches), does a late-fusion model with confidence weighting shift reliance
 onto the voice and recover performance that a face-only model loses?
 Secondary question: does performance differ across demographic groups
 (age, sex, race, ethnicity)?
@@ -9,6 +9,35 @@ Secondary question: does performance differ across demographic groups
 Dataset: [CREMA-D](https://github.com/CheyneyComputerScience/CREMA-D) only
 (7,442 clips, 91 actors, 6 emotions). **Not** FER2013. Already present at
 `data/CREMA-D/` — not downloaded or modified by this repo's code.
+
+## Final test results (frozen test set, 12 actors — complete)
+
+The research question above is answered on the frozen 12-actor test set, evaluated exactly once
+(`python evaluate.py --split test --final`, 2026-11-14) against the plan pre-specified and committed at
+`09e454e` before any test-set access.
+
+| | Test macro-F1 (mean ± std, 3 seeds) |
+|---|---|
+| eGeMAPS + LR (tuned) | 0.5044 ± 0.0000 |
+| WavLM | 0.7049 ± 0.0121 |
+| Face (clean-trained), clean | 0.6050 ± 0.0151 |
+| Face (`aug_all`), clean | 0.6227 ± 0.0100 |
+| Face (`aug_no_mask`), clean | 0.6303 ± 0.0137 |
+| Fixed 50/50 fusion (`aug_all` face + WavLM), clean | **0.7781 ± 0.0095** |
+| Fixed 50/50 fusion (`aug_all` face + WavLM), pooled over 12 synthetic-occlusion conditions | **0.7425** |
+
+- **P1** (fusion vs. WavLM alone): the fusion significantly beats voice alone in every one of 13
+  conditions (clean + 12 synthetic-occlusion conditions).
+- **P2** (`aug_no_mask` vs. clean-trained face-only, under the held-out mask type): significant at
+  every severity — occlusion-augmented training generalizes to an unseen occlusion type.
+- **P3** (confidence-weighted vs. fixed fusion): confidence-weighted fusion shows **no improvement
+  over fixed averaging** — pooled, the difference is statistically detectable but practically
+  negligible (−0.004) and favors fixed averaging, and this is **not uniform** across the 13 individual
+  conditions.
+
+Full numbers, every condition, including results that go against the project's own hypotheses:
+`RESULTS.md`, "Final test results". Everything in the rest of this README below the validation-stage
+heading is development-stage (VAL only), superseded by the table above for any test-set claim.
 
 ## Environment
 
@@ -77,6 +106,14 @@ CREMA-D is released under the Open Database License (ODbL) v1.0. The underlying 
 is released under the Database Contents License (DbCL) v1.0. See the dataset's own distribution for
 the full licence text; this project does not redistribute the dataset itself (`data/` is gitignored —
 see "Environment" below), only derived features, model outputs, and code.
+
+## Validation-stage results (development only — superseded by the final test results above)
+
+Everything from here through the demographic fairness check below was computed on the **validation
+set only** (or train+val combined, for cross-validation), during development, before the frozen test
+set was touched. It is kept in full as the project's development record, but none of it is a test-set
+claim — see "Final test results" above for the one and only evaluation on the frozen 12-actor test set.
+All occlusions in this log are synthetic (landmark-placed).
 
 ## Phase 1: data verification, metadata, splits
 
@@ -647,33 +684,38 @@ race (groups with fewer than 3 actors excluded — only `Race=Unknown`, n=1, tri
 
 **Round 5 adds actor-level bootstrap 95% CIs** (`scripts/20_demographic_bootstrap_ci.py`,
 `RESULTS.md` round 5) on the sex and age differences above — a difference is only called a "gap" if its
-CI excludes zero. Result: the sex difference does **not** reach significance for any method (round 4's
-"consistent sex gap" is retracted); the age difference (≤30 vs. 46-60) **is** a confirmed gap for the two
-`aug_all`-involving methods (face and fusion), not for the clean-trained ones; the audio branch is
-roughly uniform across age groups; and the age gap's *widening* from clean to `aug_all` training is a
-confirmed effect for fusion specifically (CI [+0.006, +0.075]), though not confirmed for the face branch
-alone.
+CI excludes zero, and even then "confirmed" means only that the interval excludes zero at this sample
+size, not that it is a real-world effect with a known cause. Result: the sex difference does **not**
+reach significance for any method (round 4's "consistent sex gap" is retracted); the age difference
+(≤30 vs. 46-60) is an **observed** difference whose CI excludes zero for the two `aug_all`-involving
+methods (face and fusion), and does not reach that threshold for the clean-trained ones; the audio
+branch is roughly uniform across age groups; and the age gap's *widening* from clean to `aug_all`
+training is similarly an observed difference with a CI excluding zero for fusion specifically
+([+0.006, +0.075]), not reaching that threshold for the face branch alone. **This entire analysis is
+validation/train-only, 1 seed per fold, development-stage, and was never re-tested on the frozen test
+set** — no cause for either difference was investigated or is claimed.
 
 ## Final evaluation — complete
 
-See `FINAL_EVAL_PLAN.md`, pre-registered before any test-set access and **amended once** (commit
+See `FINAL_EVAL_PLAN.md`, pre-specified before any test-set access and **amended once** (commit
 `09e454e`, 2026-11-13, before the test run) to: freeze calibration/the learned gate on VAL rather than
 refitting on test, promote three new primary comparisons P1 (fusion vs. WavLM alone)/P2 (`aug_no_mask`
 generalization, unchanged)/P3 (confidence-weighting vs. fixed averaging — the project's original round-1
 question, finally run as a formal test), and write the abstention rule into the plan explicitly.
 
 `python evaluate.py --split test --final` ran exactly once (2026-11-14), all 3 seeds, all 3 face
-variants, both audio branches, all 13 conditions, no changes made after seeing the results. **Headline:
-the face adds significantly to a strong voice model (P1, every condition), occlusion-augmented training
-generalizes to the unseen `mask` type (P2, every severity), and fixed 50/50 fusion significantly beats
-confidence-weighting pooled (P3) — though not in every individual condition, reported exactly as it
-came out.** Full results, every number, including the non-significant P3 conditions: `RESULTS.md`,
-"Final test results."
+variants, both audio branches, all 13 synthetic-occlusion conditions, no changes made after seeing the
+results. **Headline: the face adds significantly to a strong voice model (P1, every condition),
+occlusion-augmented training generalizes to the unseen `mask` type (P2, every severity), and
+confidence-weighted fusion shows no improvement over fixed averaging pooled (P3) — not uniform across
+the 13 individual conditions, reported exactly as it came out.** Exact numbers for P1/P2/P3 and every
+branch/fusion score: see the "Final test results" table near the top of this README, or `RESULTS.md`,
+"Final test results," for every condition including the non-significant P3 ones.
 
 ## Project structure
 
 ```
-evaluate.py       # the pre-registered final evaluation script (FINAL_EVAL_PLAN.md); --split val|test, --final gates test
+evaluate.py       # the pre-specified final evaluation script (FINAL_EVAL_PLAN.md); --split val|test, --final gates test
 src/fer/          # package: filenames, probe, demographics, metadata, splits, envinfo,
                   # audio_features, uncertainty, face_pipeline, wavlm_model
 configs/          # YAML configs (data.yaml, audio_baseline.yaml, ...)
@@ -742,7 +784,7 @@ additional source of training stochasticity — noted as a limitation, not re-ru
 
 That's still roughly **+0.20 macro-F1 over tuned eGeMAPS (0.4950)** on the identical val clips — WavLM
 remains a substantially stronger audio branch, just not quite as strong as first measured.
-`scripts/23_phase5_fusion_wavlm.py` re-runs the full pre-registered fusion comparison (all 6 methods ×
+`scripts/23_phase5_fusion_wavlm.py` re-runs the full pre-specified fusion comparison (all 6 methods ×
 all 3 face variants × all 13 conditions) with the corrected WavLM as the audio branch (each WavLM seed
 paired with the matching face-model seed); fixed 50/50 fusion still *loses* to audio-only for the
 clean-trained face under `mask` (at severities 0.3 and 0.6, now 11/13 conditions won rather than
