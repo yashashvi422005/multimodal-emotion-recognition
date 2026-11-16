@@ -48,11 +48,15 @@ averaging already captures most of the benefit that explicit reliability weighti
 \section{Introduction}
 \label{sec:intro}
 
-% AUTHOR TO REWRITE
-The motivating question for this work is simple: when a speaker's face is occluded --- by a mask, sunglasses,
-a hand, or an arbitrary patch --- does their voice carry enough emotional information to compensate, and
-does a fusion rule that explicitly weights branches by their own confidence do a better job of
-exploiting that compensation than a fusion rule that does not?
+This project started from my undergraduate final-year project, where I tried to recognise emotions
+from faces that were partly covered, and planned to use the voice as a backup when the face could not
+be read. I could not finish it, because the dataset I used (FER2013) contained only small, greyscale
+face images and no audio at all. Most emotion recognition systems quietly assume that the face is
+clearly visible, but in real life faces are often covered by masks, sunglasses or a hand, and the
+people a system fails in these moments may be the ones who need it most. So the question I wanted to
+answer here is simple: when the face is hidden, can the voice take over? This time I used a dataset
+with both video and audio, kept every speaker in only one of the training, validation and test sets,
+and fixed my evaluation plan before looking at the test set even once.
 
 This is a practical question for any audio-visual emotion recognition system deployed outside a
 controlled studio: video calls, telehealth, and in-cabin monitoring all involve faces that are sometimes
@@ -389,20 +393,14 @@ an interpretation, not a finding.
 
 \section{Conclusion}
 
-% AUTHOR TO REWRITE
-On a frozen, speaker-independent test set of 12 actors, fusing a strong voice classifier with an
-occlusion-robust face classifier significantly outperforms voice alone across every occlusion condition
-tested, including the clean condition (P1); training the face branch on synthetic occlusions that
-exclude a given occlusion type still measurably improves performance on that excluded type at test time
-(P2, with the caveat on occlusion-region overlap noted in Section~\ref{sec:limitations}); and, contrary to the intuitive
-expectation that motivated much of this project's earlier development, explicitly weighting each branch
-by its own confidence shows no improvement over fixed averaging pooled ($-0.004$, statistically detectable
-but practically negligible, and in fixed averaging's favor), and this is not uniform condition-by-condition
-(P3). The practical implication for a deployed audio-visual emotion
-recognition system handling occluded faces is that a simple, parameter-free fusion rule is a strong and
-difficult-to-beat default; the engineering effort involved in building and calibrating a
-confidence-weighted or learned fusion mechanism was not justified by this project's results, on this
-dataset, at this scale.
+On speakers the models had never seen, combining the face and the voice worked better than using the
+voice alone, for example 0.778 against 0.705 macro-F1 on clean faces. Training the face model on
+covered faces also helped, even for a type of covering it had never seen during training. My original
+idea, giving more weight to whichever branch was more confident, did not improve on simply averaging
+the two, and I have reported that result as it came out. The main thing I learned is that a simple
+method can be enough, and that measuring results honestly matters more than getting a good-looking
+number. Since the coverings here were added digitally and the emotions were acted, the next step is to
+test this on real coverings and on more natural speech.
 
 \section{Data and Code Availability}
 \label{sec:availability}
