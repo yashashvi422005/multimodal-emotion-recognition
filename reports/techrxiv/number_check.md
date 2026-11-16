@@ -62,7 +62,7 @@ to the files as of this report's commit.
 |---|---|
 | eGeMAPS 0.5044 ± 0.0000 | `RESULTS.md:483` |
 | eGeMAPS CI [0.4576, 0.5424] | `RESULTS.md:665` |
-| WavLM 0.7049 ± 0.0121 | `RESULTS.md:484` |
+| WavLM 0.7049 ± 0.0147 | Mean from `RESULTS.md:484`; ± **recomputed** as sample std (ddof=1) from the same row's per-seed values (0.6887, 0.7175, 0.7086) — `RESULTS.md`'s own committed ± for this row is 0.0121 (population std, ddof=0); see "Revision additions" below |
 | WavLM CI [0.6269, 0.7616] | `RESULTS.md:666` |
 | Face clean-trained 0.6050 ± 0.0151 | `RESULTS.md:490` |
 | Face clean-trained CI [0.5034, 0.6987] | `RESULTS.md:667` |
@@ -196,10 +196,16 @@ directly from the project's config/code/data files, verified before writing.
 | Patch side length: 37% (sev. 0.3) to 61% (sev. 0.9) of crop's shorter side | Computed from `src/fer/face_pipeline.py:231` (`size = min(h,w)*(0.25+0.4*severity)`) at severity 0.3 and 0.9 |
 | Hand-over-mouth radii: ~27%/23% (sev. 0.3) to ~36%/32% (sev. 0.9) of crop width/height | Computed from `src/fer/face_pipeline.py:251` (`rx, ry = w*(0.22+0.15*severity), h*(0.18+0.15*severity)`) at severity 0.3 and 0.9 |
 | Learned gate fit pooled across clean + all occlusion conditions | `README.md` Phase 5 round 2 section ("fit via the same 2-fold actor cross-fit but pooled across clean + every occlusion condition") — describes the gate-fitting *scope* (which conditions), not the final amendment's fit-once-on-all-val-actors mechanism, which is separately and correctly described elsewhere in the paper |
-| Std convention: population (ddof=0) for audio branches, sample (ddof=1) for face/fusion rows | Not stated anywhere as a convention; verified by direct recomputation from `RESULTS.md`'s own per-seed values (e.g. WavLM per-seed 0.6887/0.7175/0.7086 at `RESULTS.md:484` reproduces the committed ±0.0121 only under ddof=0; face-branch and fusion per-seed values at `RESULTS.md:643-658` reproduce their committed ± only under ddof=1) — same verification already applied to `README.md` (commit `e480d5b`) |
+| Learned gate fit pooled across clean + all occlusion conditions | `README.md` Phase 5 round 2 section ("fit via the same 2-fold actor cross-fit but pooled across clean + every occlusion condition") — describes the gate-fitting *scope* (which conditions), not the final amendment's fit-once-on-all-val-actors mechanism, which is separately and correctly described elsewhere in the paper |
 
-**Flagging one discrepancy rather than silently complying**: the revision instructions asked to state
-the ± convention as population SD "everywhere it appears." Direct recomputation (above) shows this is
-only true for the two audio-branch rows; every face-branch and fusion row's committed ± is sample SD
-(ddof=1). The note added to both documents states the accurate, verified dual convention rather than
-the single-convention instruction, to avoid writing something the data contradicts.
+## Superseded by the later consistency pass: std convention now sample SD throughout
+
+The previous revision stated a dual std convention (population for the two audio branches, sample for
+every face/fusion row) — accurate at the time, since that mismatch really is baked into `RESULTS.md`'s
+own committed tables. A later instruction asked for sample SD (ddof=1) everywhere instead, including
+the audio branches, for internal consistency within this paper. Rather than restate `RESULTS.md`'s
+committed (population-SD) value for WavLM, its ± was **recomputed** directly from the same row's
+committed per-seed scores (`RESULTS.md:484`) under ddof=1, giving 0.0147 in place of the committed
+0.0121 — noted explicitly in the Table 1 row above rather than silently presented as if it were
+`RESULTS.md`'s own number. Every face-branch and fusion row's ± was already sample SD and needed no
+change. eGeMAPS is deterministic (±0.0000 under either convention) and also needed no change.

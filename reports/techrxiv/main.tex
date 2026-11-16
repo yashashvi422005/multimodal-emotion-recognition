@@ -208,9 +208,8 @@ observed. The original eGeMAPS-based comparisons are still reported, as secondar
 reported alongside accuracy. Every model involving stochastic training (the face branch, WavLM) is
 trained with 3 random seeds and reported as a mean $\pm$ standard deviation across seeds; per-seed scores for
 every number in this report are available in the project's committed results log (see Section~\ref{sec:availability}).
-Two different standard-deviation conventions are used across that committed log and preserved here
-rather than silently unified: the two audio branches' $\pm$ is population standard deviation
-(ddof$=0$); every face-branch and fusion row's $\pm$ is sample standard deviation (ddof$=1$).
+$\pm$ is sample standard deviation over 3 seeds (ddof$=1$) throughout; eGeMAPS is deterministic, so
+its $\pm$ is exactly 0 under either convention.
 Statistical comparisons use an actor-level paired bootstrap: the resampling unit is the actor (not
 the clip), because clips from the same actor are not independent observations. Each of 2,000 bootstrap
 draws resamples the 12 test actors with replacement, pools all of a drawn actor's clips, computes the
@@ -245,7 +244,7 @@ where computed).}
 Branch & Condition & Macro-F1 & 95\% CI \\
 \midrule
 eGeMAPS + LR (tuned) & --- (deterministic) & 0.5044 $\pm$ 0.0000 & [0.4576, 0.5424] \\
-WavLM & --- & 0.7049 $\pm$ 0.0121 & [0.6269, 0.7616] \\
+WavLM & --- & 0.7049 $\pm$ 0.0147 & [0.6269, 0.7616] \\
 Face, clean-trained & clean & 0.6050 $\pm$ 0.0151 & [0.5034, 0.6987] \\
 Face, aug\_all & clean & 0.6227 $\pm$ 0.0100 & [0.5207, 0.7143] \\
 Face, aug\_no\_mask & clean & 0.6303 $\pm$ 0.0137 & [0.5196, 0.7279] \\

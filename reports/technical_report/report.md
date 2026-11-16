@@ -104,10 +104,13 @@ corrupted video), leaving a canonical set of **7,438 clips** used throughout. Ea
 spoken sentence labeled with one of six emotions (anger, disgust, fear, happiness, neutral, sadness).
 
 **Split.** Actors are partitioned into training (64 actors), validation (15 actors), and test (12
-actors) sets, speaker-independent — no actor appears in more than one split. This split was frozen
-before any model development began and is enforced by an automated leakage check on every data load.
-The 12-actor test set was not touched by any model training, hyperparameter selection, or calibration
-decision; it was accessed exactly once, for scoring only, after the evaluation plan below was committed.
+actors) sets, speaker-independent — no actor appears in more than one split. The split was generated
+with a fixed random seed (seed 42, sex×race-stratified with per-stratum largest-remainder rounding)
+and was frozen before any model development began; it is enforced by an automated leakage check on
+every data load. The 12-actor test set was not touched by any model training, hyperparameter
+selection, or calibration decision; it was accessed exactly once, for scoring only, after the
+evaluation plan below was committed, and the committed record of that single run is at commit
+`d2af74c65605b4b81b9a4333ce81c597115a6a7e`.
 
 The split has known demographic composition limits, carried forward rather than hidden: the
 Female-Asian stratum (2 actors total) and the Unknown-race stratum (1 actor total) appear only in
@@ -129,9 +132,8 @@ observed. The original eGeMAPS-based comparisons are still reported, as secondar
 reported alongside accuracy. Every model involving stochastic training (the face branch, WavLM) is
 trained with 3 random seeds and reported as a mean ± standard deviation across seeds; per-seed scores for
 every number in this report are available in the project's committed results log (see Section 10).
-Two different standard-deviation conventions are used across that committed log and preserved here
-rather than silently unified: the two audio branches' ± is population standard deviation (ddof=0);
-every face-branch and fusion row's ± is sample standard deviation (ddof=1).
+± is sample standard deviation over 3 seeds (ddof=1) throughout; eGeMAPS is deterministic, so its ±
+is exactly 0 under either convention.
 Statistical comparisons use an actor-level paired bootstrap: the resampling unit is the actor (not
 the clip), because clips from the same actor are not independent observations. Each of 2,000 bootstrap
 draws resamples the 12 test actors with replacement, pools all of a drawn actor's clips, computes the
@@ -211,7 +213,7 @@ where computed).**
 | Branch | Condition | Macro-F1 | 95% CI |
 |---|---|---|---|
 | eGeMAPS + LR (tuned) | — (deterministic) | 0.5044 ± 0.0000 | [0.4576, 0.5424] |
-| WavLM | — | 0.7049 ± 0.0121 | [0.6269, 0.7616] |
+| WavLM | — | 0.7049 ± 0.0147 | [0.6269, 0.7616] |
 | Face, clean-trained | clean | 0.6050 ± 0.0151 | [0.5034, 0.6987] |
 | Face, aug_all | clean | 0.6227 ± 0.0100 | [0.5207, 0.7143] |
 | Face, aug_no_mask | clean | 0.6303 ± 0.0137 | [0.5196, 0.7279] |
