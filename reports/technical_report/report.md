@@ -10,7 +10,7 @@ colorlinks: true
 ## 1. Abstract
 
 Facial occlusion (masks, sunglasses, hand-over-mouth, random patches) degrades face-based emotion
-recognition, but it need not degrade speech. This work asks whether a voice-based classifier can
+recognition, but it need not degrade speech. I ask whether a voice-based classifier can
 compensate for occlusion-induced face-branch failure under late fusion, using CREMA-D (7,438 clips,
 91 actors, speaker-independent 64/15/12 train/val/test split). Three branches — eGeMAPS features with
 logistic regression, WavLM-base-plus, and a ResNet-18 face branch trained clean or with synthetic
@@ -24,8 +24,9 @@ conditions; this fused prediction significantly outperforms voice alone in every
 (P1). Occlusion-augmented training improves performance on a held-out occlusion type at every severity
 (P2). Confidence-weighted fusion shows no improvement over fixed averaging — pooled, the difference is
 statistically detectable but practically negligible (−0.004) and favors fixed averaging — and this is
-not uniform across the 13 individual conditions (P3). The result suggests that, at this scale, naive
-averaging already captures most of the benefit that explicit reliability weighting was meant to provide.
+not uniform across the 13 individual conditions (P3). I read this as suggesting that, at this scale,
+naive averaging already captures most of the benefit that explicit reliability weighting was meant to
+provide.
 
 ## 2. Introduction
 
@@ -58,10 +59,9 @@ before any test number was seen):
   fixed 50/50 averaging, once both branches are temperature-calibrated?
 
 P3 is the paper's central methodological question. The intuitive expectation — and the reason
-confidence-weighted fusion is a standard technique in multimodal literature — is that a branch should be
-trusted less when it is uncertain, and an occluded face branch should become visibly less confident. This
-work tests that expectation directly and reports whatever the test set shows, including a negative
-result.
+confidence-weighted fusion is a common idea in multimodal fusion — is that a branch should be
+trusted less when it is uncertain, and an occluded face branch should become visibly less confident. I
+test that expectation directly and report whatever the test set shows, including a negative result.
 
 ## 3. Related Work
 
@@ -84,9 +84,9 @@ hurting standard-condition performance. Hassanie, Goyal, Ali, and Khan (2026; IE
 96162-96175) study reliability-aware multimodal emotion recognition under heterogeneous and corrupted
 audio-visual conditions and report mixed results under video corruption, consistent with the negative
 P3 result reported here (Section 6).
-None of this missing/degraded-modality work that we were able to verify evaluates *deliberately,
+None of this missing/degraded-modality work that I was able to verify evaluates *deliberately,
 systematically occluded faces* across multiple occlusion types and severities with a fixed-vs-confidence-
-weighted fusion comparison, which is the specific gap this work addresses; we narrow our claimed
+weighted fusion comparison, which is the specific gap this work addresses; I narrow my claimed
 contribution accordingly to: (i) a fixed taxonomy of landmark-placed synthetic occlusion types and
 severities, (ii) a pre-specified, statistically tested comparison of confidence-weighted against fixed
 fusion under those occlusions, and (iii) evaluation on a frozen, speaker-independent test set reported
@@ -109,6 +109,12 @@ before any model development began and is enforced by an automated leakage check
 The 12-actor test set was not touched by any model training, hyperparameter selection, or calibration
 decision; it was accessed exactly once, for scoring only, after the evaluation plan below was committed.
 
+The split has known demographic composition limits, carried forward rather than hidden: the
+Female-Asian stratum (2 actors total) and the Unknown-race stratum (1 actor total) appear only in
+training, since a stratum this small cannot place at least one actor in training, validation, and test
+simultaneously; the validation set has no actors in the 60–74 age band (4 in training, 2 in test, 0 in
+validation); and the test set has exactly 2 actors aged 45–59.
+
 **Pre-specified evaluation plan.** A written evaluation plan specifying the exact models, conditions,
 fusion methods, and a set of statistical comparisons was committed to version control before the test
 set was accessed. In that original plan, the two primary comparisons used the eGeMAPS audio branch (the
@@ -123,6 +129,9 @@ observed. The original eGeMAPS-based comparisons are still reported, as secondar
 reported alongside accuracy. Every model involving stochastic training (the face branch, WavLM) is
 trained with 3 random seeds and reported as a mean ± standard deviation across seeds; per-seed scores for
 every number in this report are available in the project's committed results log (see Section 10).
+Two different standard-deviation conventions are used across that committed log and preserved here
+rather than silently unified: the two audio branches' ± is population standard deviation (ddof=0);
+every face-branch and fusion row's ± is sample standard deviation (ddof=1).
 Statistical comparisons use an actor-level paired bootstrap: the resampling unit is the actor (not
 the clip), because clips from the same actor are not independent observations. Each of 2,000 bootstrap
 draws resamples the 12 test actors with replacement, pools all of a drawn actor's clips, computes the
@@ -130,9 +139,9 @@ paired macro-F1 difference between the two methods being compared for each of th
 resampled actor set, and averages the difference across seeds. The reported 95% confidence interval is
 the 2.5th/97.5th percentile of this distribution of 2,000 seed-averaged differences; the two-sided
 p-value is $p = 2 \times \min(\Pr[\text{diff} \le 0],\ \Pr[\text{diff} \ge 0])$, i.e. twice the smaller of
-the two one-sided bootstrap tail proportions. We use **"pre-specified"** rather than "pre-registered"
-throughout this report, since the commitment mechanism was version-control history on a private project
-repository rather than a registry with external timestamping.
+the two one-sided bootstrap tail proportions. I use **"pre-specified"** rather than "pre-registered"
+throughout this report, since the commitment mechanism was version-control history on a project
+repository that was private at the time, rather than a registry with external timestamping.
 
 **Abstention rule.** The face branch can fail to detect a face at all on a heavily occluded frame. A
 clip where every sampled frame fails detection is scored as an abstention: it counts as a false negative
@@ -160,19 +169,31 @@ training), **aug_all** (all four synthetic occlusion types applied during traini
 performance on masks reflects generalization from the other three occlusion types rather than exposure
 to the mask generator itself; Section 8 notes a caveat on how cleanly "unseen" this is in practice).
 Clip-level prediction averages per-frame softmax probabilities across multiple sampled frames per clip.
+Training uses 4 randomly subsampled frames per clip per epoch, Adam (lr $10^{-4}$), batch size 64, up
+to 6 epochs with early stopping (patience 2) evaluated on a cheap 4-frames-per-clip validation
+subsample each epoch; the final reported metrics use a denser, fixed 8-frames-per-clip evaluation
+sample instead. Full configuration: `configs/face_model.yaml`.
 
 **Synthetic occlusions.** Four occlusion types are rendered on top of a detected face using its
-MediaPipe landmarks: a lower-face **mask** (coverage increases continuously with severity, from
-mouth-and-chin at the lowest severity to just below the eyes at the highest), **sunglasses** (an opaque
-ellipse over the eye region), a randomly placed gray **patch**, and a **hand-over-mouth** occlusion
-anchored at the mouth landmarks. Each type is applied at three severities, giving 12 occlusion
-conditions plus the clean condition, 13 in total.
+MediaPipe landmarks, each at three severities (0.3, 0.6, 0.9), giving 12 occlusion conditions plus the
+clean condition, 13 in total. The **mask** is an opaque polygon whose outer boundary is always the
+lower-face oval (cheek-jaw-chin-jaw-cheek); its top edge moves monotonically up the face with severity,
+from mouth height at severity 0.3 to eyebrow height at severity 0.9, linearly interpolated in between.
+**Sunglasses** is an opaque ellipse fit to the bounding box of the eye and eyebrow landmarks, padded by
+an amount proportional to severity (from about 4.5%/18% of the box's width/height at severity 0.3 to
+about 13.5%/54% at severity 0.9). The **patch** is a single, randomly placed, randomly gray-shaded
+square whose side length grows with severity, from 37% of the face crop's shorter dimension at
+severity 0.3 to 61% at severity 0.9. **Hand-over-mouth** is a skin-colored ellipse centered on the
+mouth landmarks (with small random jitter), whose radii grow with severity, from about 27%/23% of the
+crop's width/height at severity 0.3 to about 36%/32% at severity 0.9.
 
 **Fusion.** Four methods combine the two per-branch probability vectors: **fixed 50/50** averaging;
 **confidence-weighted (max-probability)**, which weights each branch by its own calibrated maximum
 softmax probability; **confidence-weighted (negative entropy)**, an analogous weighting using negative
 entropy as the confidence signal; and a **learned gate**, a logistic regression predicting whether the
-face branch is correct from both branches' confidence scores, used as the face branch's fusion weight.
+face branch is correct from both branches' confidence scores, used as the face branch's fusion weight,
+fit on validation data pooled across the clean condition and all occlusion conditions together (not
+clean-only, since a clean-only gate would never see occluded confidence patterns).
 Both per-branch probability vectors are temperature-calibrated before fusion. Per the pre-specified
 amendment, both the calibration temperatures and the learned gate are fit once on the 15 validation
 actors and frozen; the 12 test actors' labels are used only to score predictions, never to fit any
@@ -204,8 +225,9 @@ on the clean condition alone.**
 | aug_all | 0.742 | 0.7781 ± 0.0095 |
 | aug_no_mask | 0.739 | 0.7781 ± 0.0120 |
 
-Fixed 50/50 fusion is the best of the four fusion methods for every face/audio-branch pairing tested
-except clean-trained face + eGeMAPS, where the learned gate edges it out by 0.003 macro-F1.
+Fixed 50/50 fusion has the highest mean macro-F1 of the four fusion methods for every face/audio-branch
+pairing tested except clean-trained face + eGeMAPS, where the learned gate edges it out by 0.003
+macro-F1.
 
 **P1 — fixed fusion vs. WavLM alone (aug_all face).** Significant in every one of the 13 conditions.
 Pooled: +0.0404 (95% CI [0.0182, 0.0629], p = 0.001). The effect is largest on clean faces (+0.0731,
@@ -249,16 +271,24 @@ comparison reaches significance pooled.
 ## 7. Discussion
 
 **Why fixed averaging is hard to beat.** When one branch's output distribution is close to uniform
-(the behavior of an uncertain or abstaining classifier), averaging it with a confident branch barely
-perturbs the confident branch's peak class, because a near-uniform vector adds roughly the same small
-amount to every class and so does not change the arg-max. Explicit confidence weighting earns its keep
-when a branch is confidently wrong rather than merely hedged — on development (validation) data, the
-clean-trained face branch's output under heavy masking was observed to remain relatively peaked (less
-confident than on clean faces, but still more confident than its accuracy under masking would justify)
-rather than hedging toward uniform — but this is the exception rather than the rule across the 13
-conditions tested, and the machinery needed to detect it (temperature scaling, a learned gate, or an
-entropy-based signal) introduces its own variance. Fixed averaging has no corresponding failure mode,
-because it never acts on either branch's self-reported confidence at all.
+(the behavior of an uncertain or abstaining classifier), plain averaging already handles this case on
+its own: a near-uniform vector adds roughly the same small amount to every class, so it barely perturbs
+a confident branch's peak class and does not change the arg-max. A branch that is confidently *wrong*,
+rather than merely uncertain, is a harder case, and it misleads confidence weighting just as much as it
+misleads fixed averaging: a weighting scheme built from a branch's own confidence trusts that branch
+*more* precisely because it looks sure of itself, even though it is wrong — on development (validation)
+data, the clean-trained face branch's output under heavy masking was observed to remain relatively
+peaked (less confident than on clean faces, but still more confident than its accuracy under masking
+would justify) rather than collapsing toward uniform, which is exactly this failure mode. Confidence
+weighting can therefore only improve on fixed averaging in the narrow middle case where a branch is
+wrong but its own confidence signal is detectably low without collapsing all the way to uniform;
+neither the fully-uniform case nor the confidently-wrong case gives it anything useful to act on. Fixed
+averaging is not immune to a confidently wrong branch either: with the clean-trained face branch,
+fusion does not reliably beat audio alone pooled (Table 3), precisely because averaging in a confidently
+wrong vote still drags the fused prediction toward it. What fixed averaging does avoid is having any
+parameter of its own — a temperature, a learned gate, an entropy threshold — that can itself be
+mis-estimated; that is its only structural advantage over the adaptive methods tested here, not
+immunity to the underlying failure mode.
 
 **The P3 result is the paper's central finding, not an afterthought.** The motivating hypothesis behind
 P3 was intuitive enough to be worth testing formally rather than assuming: a system should trust a branch
@@ -292,7 +322,7 @@ an interpretation, not a finding.
   training.** The hand-over-mouth occlusion (seen during `aug_no_mask` training) and the mask occlusion
   (withheld) both cover overlapping lower-face regions. `aug_no_mask`'s improvement on masks at test time
   may therefore partly reflect transfer from a visually similar occlusion region rather than transfer
-  from occlusion robustness in general; we describe this as training-time exclusion of one named
+  from occlusion robustness in general; I describe this as training-time exclusion of one named
   occlusion type, not as a test of robustness to an occlusion region the model never saw in any form.
 - **Acted speech.** CREMA-D emotions are performed by actors reading fixed sentences, not spontaneous
   affect. Results here characterize performance on acted, scripted emotional expression and may not
@@ -314,10 +344,9 @@ an interpretation, not a finding.
   here; retraining with length-bucketed batching to reduce it was not attempted in this project.
 - **A demographic age difference observed only on development (validation) data, not tested on the
   frozen test set, and not attributed to any cause.** A secondary, single-training-seed analysis on the
-  79 non-test actors, using the eGeMAPS audio branch (not WavLM), found an *observed* macro-F1 difference
-  — its 95% bootstrap confidence interval excludes zero, which we call confirmed only in the narrow
-  statistical sense that the interval excludes zero at this sample size, not confirmed as a real-world
-  effect with a known cause — between actors aged 30 or under and actors aged 46–60, for the
+  79 non-test actors, using the eGeMAPS audio branch (not WavLM), found an *observed* macro-F1
+  difference, with a 95% bootstrap confidence interval excluding zero, between actors aged 30 or under
+  and actors aged 46–60, for the
   occlusion-augmented face branch (+0.134, 95% CI [0.068, 0.201]) and the corresponding fusion pipeline
   (+0.095, CI [0.022, 0.170]); the audio branch alone showed no such difference (+0.004, CI
   [−0.057, 0.068]). A further, paired analysis asked whether occlusion-augmented training widens this age
@@ -328,7 +357,7 @@ an interpretation, not a finding.
   scope for the frozen test-set evaluation; no cause for either difference was investigated or is claimed.
   It is reported as a preliminary, development-stage observation for a future, adequately powered study to
   test formally, not as a claim about the test set or about why any difference exists.
-- **Test-set scores are higher than validation-set scores for every model and condition compared.** Both
+- **Test-set scores are higher than validation-set scores for every model reported.** Both
   audio branches, all three face variants, and the fusion pipeline score somewhat higher on the 12-actor
   test set than the 15-actor validation set (e.g., WavLM: 0.6929 validation vs. 0.7049 test; clean-trained
   face on clean faces: 0.5724 validation vs. 0.6050 test). Reported as observed; with only 12 and 15
@@ -368,5 +397,7 @@ pre-specified comparisons, and scope reductions) alongside the author. Every suc
 explicitly approved by the author before being implemented or written. Claude Code was also used to draft
 this report's prose from the project's committed, author-reviewed results; all numbers in this report
 were read directly from the project's version-controlled results log rather than computed by, or left to
-the discretion of, the assistant while drafting. The author takes full responsibility for the correctness
-and interpretation of all content in this report.
+the discretion of, the assistant while drafting. The Introduction's opening paragraph and the
+Conclusion were first drafted, from the author's own stated points, with help from Claude in the
+separate conversational interface, then reviewed and edited by the author. The author takes full
+responsibility for the correctness and interpretation of all content in this report.

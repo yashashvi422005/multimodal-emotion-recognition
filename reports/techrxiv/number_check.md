@@ -173,3 +173,33 @@ Per your instruction, the table above is honest about which numbers are **not** 
 
 No number in the paper was invented or computed fresh for this conversion; every one above traces to
 an existing committed file.
+
+## Revision additions (this pass: Discussion correction, occlusion geometry, demographics, training config, std-convention note)
+
+None of the numbers below are in `RESULTS.md` either — they describe the data split, the occlusion
+rendering code, and the face-model training config, not experimental results — so each is sourced
+directly from the project's config/code/data files, verified before writing.
+
+| Number | Source |
+|---|---|
+| Female-Asian stratum, 2 actors, train-only | `README.md:215` |
+| Unknown-race stratum, 1 actor, train-only | `README.md:215` |
+| Val has no 60–74 age-band actors (train: 4, test: 2, val: 0) | `README.md:219` |
+| Test set: exactly 2 actors aged 45–59 | Computed directly from `splits/split_v1.json`'s test-actor list joined against `data/CREMA-D/VideoDemographics.csv` (actors 1025 age 48, 1039 age 51) — verified by query before writing, not previously stated in any committed file |
+| Face-model training: 4 frames/clip/epoch | `configs/face_model.yaml:6` (`frames_per_clip_train: 4`) |
+| Face-model training: 4-frame monitor subsample | `configs/face_model.yaml:7` (`monitor_frames_per_clip: 4`) |
+| Face-model training: max_epochs=6, patience=2 | `configs/face_model.yaml:8-9` |
+| Face-model training: batch_size=64, lr=1e-4, Adam | `configs/face_model.yaml:10-11`; optimizer identity (Adam) from `README.md`'s Phase 4 section ("Adam lr=1e-4") since the YAML itself doesn't name the optimizer |
+| Face-model evaluation: 8 frames/clip | `configs/face_model.yaml:22` (`frames_per_clip_eval: 8`) |
+| Mask: top edge at mouth height (severity 0.3) to eyebrow height (severity 0.9), linear interpolation | `src/fer/face_pipeline.py:167-175` (`_SEVERITY_LO/_HI = 0.3, 0.9`, `_mask_top_edge_y`) — corrects the earlier, inaccurate "just below the eyes" description |
+| Sunglasses padding: 4.5%/18% (sev. 0.3) to 13.5%/54% (sev. 0.9) of eye-box width/height | Computed from `src/fer/face_pipeline.py:221` (`pad_x, pad_y = (x2-x1)*0.15*severity, (y2-y1)*0.6*severity`) at severity 0.3 and 0.9 |
+| Patch side length: 37% (sev. 0.3) to 61% (sev. 0.9) of crop's shorter side | Computed from `src/fer/face_pipeline.py:231` (`size = min(h,w)*(0.25+0.4*severity)`) at severity 0.3 and 0.9 |
+| Hand-over-mouth radii: ~27%/23% (sev. 0.3) to ~36%/32% (sev. 0.9) of crop width/height | Computed from `src/fer/face_pipeline.py:251` (`rx, ry = w*(0.22+0.15*severity), h*(0.18+0.15*severity)`) at severity 0.3 and 0.9 |
+| Learned gate fit pooled across clean + all occlusion conditions | `README.md` Phase 5 round 2 section ("fit via the same 2-fold actor cross-fit but pooled across clean + every occlusion condition") — describes the gate-fitting *scope* (which conditions), not the final amendment's fit-once-on-all-val-actors mechanism, which is separately and correctly described elsewhere in the paper |
+| Std convention: population (ddof=0) for audio branches, sample (ddof=1) for face/fusion rows | Not stated anywhere as a convention; verified by direct recomputation from `RESULTS.md`'s own per-seed values (e.g. WavLM per-seed 0.6887/0.7175/0.7086 at `RESULTS.md:484` reproduces the committed ±0.0121 only under ddof=0; face-branch and fusion per-seed values at `RESULTS.md:643-658` reproduce their committed ± only under ddof=1) — same verification already applied to `README.md` (commit `e480d5b`) |
+
+**Flagging one discrepancy rather than silently complying**: the revision instructions asked to state
+the ± convention as population SD "everywhere it appears." Direct recomputation (above) shows this is
+only true for the two audio-branch rows; every face-branch and fusion row's committed ± is sample SD
+(ddof=1). The note added to both documents states the accurate, verified dual convention rather than
+the single-convention instruction, to avoid writing something the data contradicts.
